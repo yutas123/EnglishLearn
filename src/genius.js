@@ -3,11 +3,20 @@ import * as cheerio from "cheerio";
 const GENIUS_API_URL = "https://api.genius.com";
 
 /**
+ * 文字列を正規化（比較用）
+ */
+function normalize(str) {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Genius APIで曲を検索し、歌詞ページURLを取得
  */
 async function searchSong(artist, title, accessToken) {
   const query = encodeURIComponent(`${artist} ${title}`);
-  const url = `${GENIUS_API_URL}/search?q=${query}`;
+  const url = `${GENIUS_API_URL}/search?q=${query}&per_page=10`;
 
   const res = await fetch(url, {
     headers: {
@@ -21,9 +30,17 @@ async function searchSong(artist, title, accessToken) {
     return null;
   }
 
-  // 最初の結果を使用
-  const hit = data.response.hits[0].result;
-  return hit.url;
+  // 検索結果から曲名が完全一致するものを探す
+  const targetTitle = normalize(title);
+  for (const hit of data.response.hits) {
+    const resultTitle = normalize(hit.result.title);
+    if (resultTitle === targetTitle) {
+      return hit.result.url;
+    }
+  }
+
+  // 一致するものがなければnull
+  return null;
 }
 
 /**
