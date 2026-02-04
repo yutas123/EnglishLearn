@@ -94,15 +94,6 @@ export async function addLyricsToPage(pageId, translations) {
   // Notionブロックの配列を作成
   const blocks = [];
 
-  // 見出しを追加
-  blocks.push({
-    object: "block",
-    type: "heading_2",
-    heading_2: {
-      rich_text: [{ type: "text", text: { content: "Lyrics / 対訳" } }],
-    },
-  });
-
   // 各行の対訳を追加
   for (const item of translations) {
     // originalが未定義の場合はスキップ

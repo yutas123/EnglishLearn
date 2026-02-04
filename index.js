@@ -7,8 +7,8 @@ import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
 /**
  * ★ 入力はここだけ ★
  */
-const ARTIST_NAME = "Elliott Smith";
-const ALBUM_NAME = "Elliott Smith";
+const ARTIST_NAME = "The Kinks";
+const ALBUM_NAME = "The Kinks are the Village Green Preservation Society";
 
 async function main() {
   try {
