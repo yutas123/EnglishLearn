@@ -7,8 +7,8 @@ import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
 /**
  * ★ 入力はここだけ ★
  */
-const ARTIST_NAME = "The Beatles";
-const ALBUM_NAME = "Revolver";
+const ARTIST_NAME = "Elliott Smith";
+const ALBUM_NAME = "Elliott Smith";
 
 async function main() {
   try {
