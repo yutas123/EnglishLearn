@@ -107,7 +107,8 @@ export async function addLyricsToPage(pageId, translations) {
   for (const item of translations) {
     // originalが未定義の場合はスキップ
     const original = item.original || item.line || item.text || item.english || "";
-    const translation = item.translation || item.japanese || item.translated || "";
+    const translation = item.translation || item.meaning || item.japanese || item.translated || "";
+    const explanation = item.explanation || "";
 
     if (!original) continue;
 
@@ -137,6 +138,37 @@ export async function addLyricsToPage(pageId, translations) {
               type: "text",
               text: { content: translation },
               annotations: { color: "gray" },
+            },
+          ],
+        },
+      });
+    }
+
+    // 解説がある場合はトグルブロックで追加
+    if (explanation) {
+      blocks.push({
+        object: "block",
+        type: "toggle",
+        toggle: {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: "💡 解説" },
+              annotations: { color: "gray", italic: true },
+            },
+          ],
+          children: [
+            {
+              object: "block",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: { content: explanation },
+                  },
+                ],
+              },
             },
           ],
         },
