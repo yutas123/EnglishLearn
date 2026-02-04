@@ -78,9 +78,27 @@ async function scrapeLyrics(url) {
 }
 
 /**
- * 歌詞を行ごとの配列に分割（空行・セクション見出しを除去）
+ * 歌詞を行ごとの配列に分割（空行・セクション見出し・メタ情報を除去）
  */
 function parseLyricsToLines(lyrics) {
+  // メタ情報として除外するパターン
+  const metaPatterns = [
+    /^contributors?$/i,
+    /^translations?$/i,
+    /^read more$/i,
+    /^embed$/i,
+    /^see .* live$/i,
+    /^get tickets/i,
+    /^\d+ contributors?$/i,
+    /^\d+ translations?$/i,
+    /^you might also like$/i,
+    /^pyong$/i,
+    /^share$/i,
+    /^url$/i,
+    /^copy$/i,
+    /^report$/i,
+  ];
+
   return lyrics
     .split("\n")
     .map((line) => line.trim())
@@ -89,6 +107,10 @@ function parseLyricsToLines(lyrics) {
       if (!line) return false;
       // セクション見出し [Verse 1] などを除去
       if (line.startsWith("[") && line.endsWith("]")) return false;
+      // メタ情報パターンに一致する行を除去
+      for (const pattern of metaPatterns) {
+        if (pattern.test(line)) return false;
+      }
       return true;
     });
 }
