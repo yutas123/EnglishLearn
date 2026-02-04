@@ -41,6 +41,51 @@ export async function createTrack({ title, trackNo, albumPageId }) {
 }
 
 /**
+ * アルバムページにトラックリストを追加
+ * @param {string} albumPageId - アルバムのNotionページID
+ * @param {Array<{trackNo: number, title: string, pageId: string}>} tracks - トラック情報配列
+ */
+export async function addTrackListToAlbum(albumPageId, tracks) {
+  // trackNoで昇順ソート
+  const sortedTracks = [...tracks].sort((a, b) => a.trackNo - b.trackNo);
+
+  const blocks = [];
+
+  // 見出しを追加
+  blocks.push({
+    object: "block",
+    type: "heading_2",
+    heading_2: {
+      rich_text: [{ type: "text", text: { content: "Track List" } }],
+    },
+  });
+
+  // 各トラックを番号付きリストで追加（ページへのリンク付き）
+  for (const track of sortedTracks) {
+    blocks.push({
+      object: "block",
+      type: "numbered_list_item",
+      numbered_list_item: {
+        rich_text: [
+          {
+            type: "mention",
+            mention: {
+              type: "page",
+              page: { id: track.pageId },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  await notion.blocks.children.append({
+    block_id: albumPageId,
+    children: blocks,
+  });
+}
+
+/**
  * ページに対訳歌詞を追加
  * @param {string} pageId - NotionページID
  * @param {Array<{original: string, translation: string}>} translations - 対訳配列

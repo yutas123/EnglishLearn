@@ -1,5 +1,5 @@
 import { searchRelease, getTrackList } from "./src/musicbrainz.js";
-import { createAlbum, createTrack, addLyricsToPage } from "./src/notion.js";
+import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum } from "./src/notion.js";
 import { getLyrics } from "./src/genius.js";
 import { translateLyrics } from "./src/translator.js";
 import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
@@ -41,6 +41,8 @@ async function main() {
     console.log(`✅ アルバム作成完了 (ID: ${albumPageId})`);
 
     // ④ 各トラックをNotionに登録（アルバムにリレーション）+ 歌詞と対訳
+    const createdTracks = []; // トラックリスト用に保存
+
     for (const track of tracks) {
       console.log(`  → 登録中: ${track.trackNo}. ${track.title}`);
 
@@ -49,6 +51,13 @@ async function main() {
         title: track.title,
         trackNo: track.trackNo,
         albumPageId: albumPageId,
+      });
+
+      // トラックリスト用に保存
+      createdTracks.push({
+        trackNo: track.trackNo,
+        title: track.title,
+        pageId: trackPageId,
       });
 
       // 歌詞取得
@@ -71,6 +80,10 @@ async function main() {
       // API制限対策のため少し待機
       await sleep(1000);
     }
+
+    // ⑤ アルバムページにトラックリストを追加
+    console.log(`📋 アルバムページにトラックリストを追加中...`);
+    await addTrackListToAlbum(albumPageId, createdTracks);
 
     console.log("🎉 完了！アルバムと全曲（歌詞付き）がNotionに登録されました");
   } catch (error) {
