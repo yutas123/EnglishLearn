@@ -74,11 +74,11 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       const content = response.choices[0].message.content;
       const parsed = JSON.parse(content);
 
-      // コスト表示（GPT-4o の価格: 入力 $2.50/1M tokens, 出力 $10.00/1M tokens）
+      // コスト表示（gpt-5.2 の価格: 入力 $1.75/1M tokens, 出力 $14.00/1M tokens）
       const usage = response.usage;
       if (usage) {
-        const inputCost = (usage.prompt_tokens / 1_000_000) * 2.50;
-        const outputCost = (usage.completion_tokens / 1_000_000) * 10.00;
+        const inputCost = (usage.prompt_tokens / 1_000_000) * 1.75;
+        const outputCost = (usage.completion_tokens / 1_000_000) * 14.00;
         const totalCost = inputCost + outputCost;
         const totalCostYen = totalCost * 150; // 1ドル=150円換算
         console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
