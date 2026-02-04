@@ -7,8 +7,8 @@ import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
 /**
  * ★ 入力はここだけ ★
  */
-const ARTIST_NAME = "The Cure";
-const ALBUM_NAME = "Seventeen Seconds";
+const ARTIST_NAME = "The Beatles";
+const ALBUM_NAME = "Revolver";
 
 async function main() {
   try {
@@ -79,6 +79,9 @@ async function main() {
 
       // API制限対策のため少し待機
       await sleep(1000);
+
+      // デバッグ用: 1曲だけで止める（後で削除）
+      break;
     }
 
     // ⑤ アルバムページにトラックリストを追加

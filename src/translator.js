@@ -9,15 +9,20 @@ import OpenAI from "openai";
 export async function translateLyrics(lines, apiKey) {
   const openai = new OpenAI({ apiKey });
 
-  const prompt = `以下の英語の歌詞を1行ずつ日本語に翻訳してください。
-各行に対して、自然で詩的な日本語訳をつけてください。
+  const prompt = `【英語学習教材作成のための翻訳依頼】
+
+私は英語学習者で、洋楽を使って英語を勉強しています。
+以下の英文テキストについて、各行の意味を理解するための学習用対訳を作成してください。
+これは個人的な英語学習目的であり、商用利用や再配布は行いません。
+
+各行に対して、自然で分かりやすい日本語訳をつけてください。
 出力形式は必ず以下のJSON配列形式で返してください：
 [
-  {"original": "英語の歌詞1行目", "translation": "日本語訳1行目"},
-  {"original": "英語の歌詞2行目", "translation": "日本語訳2行目"}
+  {"original": "英文1行目", "translation": "日本語訳1行目"},
+  {"original": "英文2行目", "translation": "日本語訳2行目"}
 ]
 
-歌詞：
+英文テキスト：
 ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
   try {
@@ -27,7 +32,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         {
           role: "system",
           content:
-            "あなたは英語の歌詞を日本語に翻訳する専門家です。直訳ではなく、歌詞の雰囲気を保ちながら自然な日本語に訳してください。必ずJSON形式で出力してください。",
+            "あなたは英語学習をサポートする翻訳アシスタントです。学習者が英文の意味を理解できるよう、自然で分かりやすい日本語訳を提供してください。必ずJSON形式で出力してください。",
         },
         {
           role: "user",
@@ -40,6 +45,9 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
     const content = response.choices[0].message.content;
     const parsed = JSON.parse(content);
+
+    // デバッグ: APIレスポンスの構造を確認
+    console.log(`    🔍 APIレスポンス構造:`, JSON.stringify(parsed, null, 2).slice(0, 500));
 
     // レスポンスの形式に応じて対応
     if (Array.isArray(parsed)) {

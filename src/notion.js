@@ -104,7 +104,13 @@ export async function addLyricsToPage(pageId, translations) {
   });
 
   // 各行の対訳を追加
-  for (const { original, translation } of translations) {
+  for (const item of translations) {
+    // originalが未定義の場合はスキップ
+    const original = item.original || item.line || item.text || item.english || "";
+    const translation = item.translation || item.japanese || item.translated || "";
+
+    if (!original) continue;
+
     // 英語原文
     blocks.push({
       object: "block",
