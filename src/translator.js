@@ -1,5 +1,15 @@
 import OpenAI from "openai";
 
+const MAX_RETRIES = 3;
+const TIMEOUT_MS = 60000; // 60秒
+
+/**
+ * 指定ミリ秒待機
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * OpenAI APIで歌詞を1行ずつ対訳
  * @param {string[]} lines - 歌詞の行配列
@@ -7,7 +17,7 @@ import OpenAI from "openai";
  * @returns {Array<{original: string, translation: string}>} 対訳配列
  */
 export async function translateLyrics(lines, apiKey) {
-  const openai = new OpenAI({ apiKey });
+  const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
 
   const prompt = `【英語学習ノート作成 - 対訳と表現解説】
 
@@ -40,57 +50,76 @@ JSON形式で出力：
 フレーズ一覧：
 ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      messages: [
-        {
-          role: "system",
-          content:
-            "あなたは英語学習をサポートする翻訳アシスタントです。学習者が英文の意味を理解できるよう、自然で分かりやすい日本語訳を提供してください。必ずJSON形式で出力してください。",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-    });
+  let lastError;
 
-    const content = response.choices[0].message.content;
-    const parsed = JSON.parse(content);
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          {
+            role: "system",
+            content:
+              "あなたは英語学習をサポートする翻訳アシスタントです。学習者が英文の意味を理解できるよう、自然で分かりやすい日本語訳を提供してください。必ずJSON形式で出力してください。",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      });
 
-    // コスト表示（GPT-4o の価格: 入力 $2.50/1M tokens, 出力 $10.00/1M tokens）
-    const usage = response.usage;
-    if (usage) {
-      const inputCost = (usage.prompt_tokens / 1_000_000) * 2.50;
-      const outputCost = (usage.completion_tokens / 1_000_000) * 10.00;
-      const totalCost = inputCost + outputCost;
-      const totalCostYen = totalCost * 150; // 1ドル=150円換算
-      console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
-    }
+      const content = response.choices[0].message.content;
+      const parsed = JSON.parse(content);
 
-    // レスポンスの形式に応じて対応
-    if (Array.isArray(parsed)) {
-      return parsed;
-    } else if (parsed.translations) {
-      return parsed.translations;
-    } else if (parsed.lyrics) {
-      return parsed.lyrics;
-    }
-
-    // オブジェクトの最初の配列プロパティを探す
-    for (const key of Object.keys(parsed)) {
-      if (Array.isArray(parsed[key])) {
-        return parsed[key];
+      // コスト表示（GPT-4o の価格: 入力 $2.50/1M tokens, 出力 $10.00/1M tokens）
+      const usage = response.usage;
+      if (usage) {
+        const inputCost = (usage.prompt_tokens / 1_000_000) * 2.50;
+        const outputCost = (usage.completion_tokens / 1_000_000) * 10.00;
+        const totalCost = inputCost + outputCost;
+        const totalCostYen = totalCost * 150; // 1ドル=150円換算
+        console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
       }
-    }
 
-    throw new Error("予期しないレスポンス形式");
-  } catch (error) {
-    console.log(`    ⚠️ 翻訳エラー: ${error.message}`);
-    // フォールバック：原文のみ返す
-    return lines.map((line) => ({ original: line, translation: "" }));
+      // レスポンスの形式に応じて対応
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed.translations) {
+        return parsed.translations;
+      } else if (parsed.lyrics) {
+        return parsed.lyrics;
+      }
+
+      // オブジェクトの最初の配列プロパティを探す
+      for (const key of Object.keys(parsed)) {
+        if (Array.isArray(parsed[key])) {
+          return parsed[key];
+        }
+      }
+
+      throw new Error("予期しないレスポンス形式");
+    } catch (error) {
+      lastError = error;
+      const isTimeout = error.code === 'ETIMEDOUT' || error.message.includes('timeout');
+      const isRetryable = isTimeout || error.status === 429 || error.status >= 500;
+
+      if (attempt < MAX_RETRIES && isRetryable) {
+        const waitTime = attempt * 5000; // 5秒、10秒、15秒と増加
+        console.log(`    ⚠️ リトライ ${attempt}/${MAX_RETRIES}: ${error.message} (${waitTime / 1000}秒後に再試行)`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      console.log(`    ⚠️ 翻訳エラー: ${error.message}`);
+      // フォールバック：原文のみ返す
+      return lines.map((line) => ({ original: line, translation: "" }));
+    }
   }
+
+  // ここには到達しないはずだが念のため
+  console.log(`    ⚠️ 翻訳エラー: ${lastError?.message}`);
+  return lines.map((line) => ({ original: line, translation: "" }));
 }
