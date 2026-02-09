@@ -35,9 +35,9 @@ async function main() {
     const tracks = await getTrackList(releaseId);
     console.log(`🎧 ${tracks.length} 曲取得`);
 
-    // ③ Notionにアルバム作成
+    // ③ Notionにアルバム作成（ジャケット画像付き）
     console.log(`📀 アルバム作成中: ${albumTitle}`);
-    const albumPageId = await createAlbum({ albumName: albumTitle });
+    const albumPageId = await createAlbum({ albumName: albumTitle, releaseId });
     console.log(`✅ アルバム作成完了 (ID: ${albumPageId})`);
 
     // ④ 各トラックをNotionに登録（アルバムにリレーション）+ 歌詞と対訳
