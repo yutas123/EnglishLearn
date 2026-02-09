@@ -123,3 +123,94 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
   console.log(`    ⚠️ 翻訳エラー: ${lastError?.message}`);
   return lines.map((line) => ({ original: line, translation: "" }));
 }
+
+/**
+ * OpenAI APIで楽曲解説/考察を生成
+ * @param {string[]} lines - 歌詞の行配列
+ * @param {string} songTitle - 曲名
+ * @param {string} artistName - アーティスト名
+ * @param {string} apiKey - OpenAI APIキー
+ * @returns {string} 楽曲解説テキスト
+ */
+export async function generateSongAnalysis(lines, songTitle, artistName, apiKey) {
+  const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
+
+  const lyricsText = lines.join("\n");
+
+  const prompt = `【楽曲解説・考察の作成】
+
+以下は「${artistName}」の楽曲「${songTitle}」の歌詞です。
+この曲について、英語学習者向けに総合的な解説を作成してください。
+
+【含めてほしい内容】
+1. **テーマ・メッセージ**: この曲が伝えようとしている主題や感情
+2. **文化的・歴史的背景**: 曲が生まれた時代背景やアーティストの意図（分かる範囲で）
+3. **歌詞の解釈・考察**: 比喩表現やストーリーの深い分析
+
+【形式】
+- 日本語で記述
+- 見出しは使わず、自然な文章で繋げる
+- 300〜500文字程度
+
+【歌詞】
+${lyricsText}`;
+
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          {
+            role: "system",
+            content:
+              "あなたは音楽と英語に精通した解説者です。楽曲の歌詞を分析し、学習者が曲の背景や意味を深く理解できるよう、分かりやすい解説を提供してください。",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+      });
+
+      const content = response.choices[0].message.content;
+
+      // コスト表示
+      const usage = response.usage;
+      if (usage) {
+        const inputCost = (usage.prompt_tokens / 1_000_000) * 1.75;
+        const outputCost = (usage.completion_tokens / 1_000_000) * 14.0;
+        const totalCost = inputCost + outputCost;
+        const totalCostYen = totalCost * 150;
+        console.log(
+          `    💰 解説コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`
+        );
+      }
+
+      return content.trim();
+    } catch (error) {
+      lastError = error;
+      const isTimeout =
+        error.code === "ETIMEDOUT" || error.message.includes("timeout");
+      const isRetryable =
+        isTimeout || error.status === 429 || error.status >= 500;
+
+      if (attempt < MAX_RETRIES && isRetryable) {
+        const waitTime = attempt * 5000;
+        console.log(
+          `    ⚠️ リトライ ${attempt}/${MAX_RETRIES}: ${error.message} (${waitTime / 1000}秒後に再試行)`
+        );
+        await sleep(waitTime);
+        continue;
+      }
+
+      console.log(`    ⚠️ 解説生成エラー: ${error.message}`);
+      return null;
+    }
+  }
+
+  console.log(`    ⚠️ 解説生成エラー: ${lastError?.message}`);
+  return null;
+}

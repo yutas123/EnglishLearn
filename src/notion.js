@@ -223,3 +223,47 @@ export async function addLyricsToPage(pageId, translations) {
     });
   }
 }
+
+/**
+ * ページに楽曲解説を追加
+ * @param {string} pageId - NotionページID
+ * @param {string} analysis - 楽曲解説テキスト
+ */
+export async function addSongAnalysisToPage(pageId, analysis) {
+  if (!analysis) return;
+
+  const blocks = [
+    // 区切り線
+    {
+      object: "block",
+      type: "divider",
+      divider: {},
+    },
+    // 見出し
+    {
+      object: "block",
+      type: "heading_2",
+      heading_2: {
+        rich_text: [{ type: "text", text: { content: "楽曲解説" } }],
+      },
+    },
+    // 本文
+    {
+      object: "block",
+      type: "paragraph",
+      paragraph: {
+        rich_text: [
+          {
+            type: "text",
+            text: { content: analysis },
+          },
+        ],
+      },
+    },
+  ];
+
+  await notion.blocks.children.append({
+    block_id: pageId,
+    children: blocks,
+  });
+}

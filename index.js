@@ -1,7 +1,7 @@
 import { searchRelease, getTrackList } from "./src/musicbrainz.js";
-import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum } from "./src/notion.js";
+import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum, addSongAnalysisToPage } from "./src/notion.js";
 import { getLyrics } from "./src/genius.js";
-import { translateLyrics } from "./src/translator.js";
+import { translateLyrics, generateSongAnalysis } from "./src/translator.js";
 import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
 
 /**
@@ -74,6 +74,19 @@ async function main() {
 
         console.log(`    📄 Notionに歌詞を追加中...`);
         await addLyricsToPage(trackPageId, translations);
+
+        // 楽曲解説を生成・追加
+        console.log(`    📖 楽曲解説を生成中...`);
+        const analysis = await generateSongAnalysis(
+          lyrics,
+          track.title,
+          ARTIST_NAME,
+          OPENAI_API_KEY
+        );
+        if (analysis) {
+          await addSongAnalysisToPage(trackPageId, analysis);
+        }
+
         console.log(`    ✅ 完了`);
       }
 
