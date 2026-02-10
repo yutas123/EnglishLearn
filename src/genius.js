@@ -116,6 +116,55 @@ function parseLyricsToLines(lyrics) {
 }
 
 /**
+ * Genius APIでアルバムURLを取得
+ * 最初のヒット曲の詳細からアルバム情報を取得する
+ * @param {string} artist - アーティスト名
+ * @param {string} albumName - アルバム名
+ * @param {string} accessToken - Genius APIトークン
+ * @returns {Promise<string|null>} GeniusアルバムページURL、見つからない場合はnull
+ */
+export async function getAlbumUrl(artist, albumName, accessToken) {
+  try {
+    const query = encodeURIComponent(`${artist} ${albumName}`);
+    const url = `${GENIUS_API_URL}/search?q=${query}&per_page=5`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await res.json();
+
+    if (!data.response.hits || data.response.hits.length === 0) {
+      return null;
+    }
+
+    // 検索結果からアーティストが一致するヒットを探す
+    const targetArtist = normalize(artist);
+    const hit = data.response.hits.find(
+      (h) => normalize(h.result.primary_artist.name) === targetArtist
+    );
+
+    if (!hit) return null;
+
+    // 曲の詳細からアルバム情報を取得
+    const songId = hit.result.id;
+    const songRes = await fetch(`${GENIUS_API_URL}/songs/${songId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const songData = await songRes.json();
+
+    const album = songData.response.song.album;
+    if (album && album.url) {
+      return album.url;
+    }
+
+    return null;
+  } catch (error) {
+    console.log(`    ⚠️ Geniusアルバム検索エラー: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * アーティスト名と曲名から歌詞を取得
  * @returns {string[]|null} 歌詞の行配列、見つからない場合はnull
  */

@@ -1,6 +1,6 @@
 import { searchRelease, getTrackList } from "./src/musicbrainz.js";
-import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum, addSongAnalysisToPage } from "./src/notion.js";
-import { getLyrics } from "./src/genius.js";
+import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum, addSongAnalysisToPage, updateAlbumGeniusLink } from "./src/notion.js";
+import { getLyrics, getAlbumUrl } from "./src/genius.js";
 import { translateLyrics, generateSongAnalysis } from "./src/translator.js";
 import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
 
@@ -39,6 +39,16 @@ async function main() {
     console.log(`📀 アルバム作成中: ${albumTitle}`);
     const albumPageId = await createAlbum({ albumName: albumTitle, releaseId });
     console.log(`✅ アルバム作成完了 (ID: ${albumPageId})`);
+
+    // ③-2 GeniusアルバムURLを取得してNotionに保存
+    console.log(`🔗 Geniusアルバムリンクを検索中...`);
+    const geniusAlbumUrl = await getAlbumUrl(ARTIST_NAME, ALBUM_NAME, GENIUS_ACCESS_TOKEN);
+    if (geniusAlbumUrl) {
+      await updateAlbumGeniusLink(albumPageId, geniusAlbumUrl);
+      console.log(`✅ Geniusリンク設定完了: ${geniusAlbumUrl}`);
+    } else {
+      console.log(`⚠️ Geniusアルバムリンクが見つかりませんでした`);
+    }
 
     // ④ 各トラックをNotionに登録（アルバムにリレーション）+ 歌詞と対訳
     const createdTracks = []; // トラックリスト用に保存

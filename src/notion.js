@@ -55,6 +55,22 @@ export async function createAlbum({ albumName, releaseId }) {
 }
 
 /**
+ * アルバムページのGeniusプロパティにURLを設定
+ * @param {string} albumPageId - アルバムのNotionページID
+ * @param {string} geniusUrl - GeniusアルバムページURL
+ */
+export async function updateAlbumGeniusLink(albumPageId, geniusUrl) {
+  await notion.pages.update({
+    page_id: albumPageId,
+    properties: {
+      Genius: {
+        url: geniusUrl,
+      },
+    },
+  });
+}
+
+/**
  * 全曲DBにトラックを作成（アルバムへのリレーション付き）
  * @returns {string} 作成したトラックのページID
  */
