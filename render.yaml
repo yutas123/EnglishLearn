@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: english-learn
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NOTION_TOKEN
+        sync: false
+      - key: ALBUM_DB_ID
+        sync: false
+      - key: TRACK_DB_ID
+        sync: false
+      - key: GENIUS_ACCESS_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

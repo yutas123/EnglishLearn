@@ -34,6 +34,11 @@ function setupSSE(res) {
 }
 
 /**
+ * GET /healthz — Renderヘルスチェック用
+ */
+app.get("/healthz", (_req, res) => res.send("ok"));
+
+/**
  * GET /api/status — 実行中ジョブの有無
  */
 app.get("/api/status", (_req, res) => {
