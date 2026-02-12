@@ -1,73 +1,40 @@
 import { notion, ALBUM_DB_ID, TRACK_DB_ID } from "./config.js";
 
 /**
- * Cover Art Archiveからジャケット画像が取得可能かチェック
- * @param {string} releaseId - MusicBrainz Release ID
- * @returns {Promise<string|null>} 画像URLまたはnull
- */
-async function getCoverArtUrl(releaseId) {
-  const url = `https://coverartarchive.org/release/${releaseId}/front-250`;
-  try {
-    const response = await fetch(url, { method: "HEAD" });
-    if (response.ok) {
-      return url;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * アルバムDBにアルバムを作成
  * @param {Object} params
  * @param {string} params.albumName - アルバム名
- * @param {string} [params.releaseId] - MusicBrainz Release ID（ジャケット取得用）
+ * @param {string} [params.coverArtUrl] - ジャケット画像URL
+ * @param {string} [params.geniusUrl] - GeniusアルバムページURL
  * @returns {string} 作成したアルバムのページID
  */
-export async function createAlbum({ albumName, releaseId }) {
-  // ジャケット画像URLを取得
+export async function createAlbum({ albumName, coverArtUrl, geniusUrl }) {
   let iconConfig = undefined;
-  if (releaseId) {
-    const coverUrl = await getCoverArtUrl(releaseId);
-    if (coverUrl) {
-      iconConfig = {
-        type: "external",
-        external: { url: coverUrl },
-      };
-      console.log(`  🖼️ ジャケット画像を設定`);
-    } else {
-      console.log(`  ⚠️ ジャケット画像が見つかりません`);
-    }
+  if (coverArtUrl) {
+    iconConfig = {
+      type: "external",
+      external: { url: coverArtUrl },
+    };
+    console.log(`  🖼️ ジャケット画像を設定`);
+  }
+
+  const properties = {
+    アルバム名: {
+      title: [{ text: { content: albumName } }],
+    },
+  };
+
+  if (geniusUrl) {
+    properties.Genius = { url: geniusUrl };
   }
 
   const response = await notion.pages.create({
     parent: { database_id: ALBUM_DB_ID },
     ...(iconConfig && { icon: iconConfig }),
-    properties: {
-      アルバム名: {
-        title: [{ text: { content: albumName } }],
-      },
-    },
+    properties,
   });
 
   return response.id;
-}
-
-/**
- * アルバムページのGeniusプロパティにURLを設定
- * @param {string} albumPageId - アルバムのNotionページID
- * @param {string} geniusUrl - GeniusアルバムページURL
- */
-export async function updateAlbumGeniusLink(albumPageId, geniusUrl) {
-  await notion.pages.update({
-    page_id: albumPageId,
-    properties: {
-      Genius: {
-        url: geniusUrl,
-      },
-    },
-  });
 }
 
 /**

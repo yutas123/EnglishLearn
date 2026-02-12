@@ -11,6 +11,34 @@ function sleep(ms) {
 }
 
 /**
+ * GPTレスポンスから対訳配列を再帰的に探す
+ */
+function extractTranslations(data) {
+  if (Array.isArray(data) && data.length > 0 && data[0].original !== undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && typeof data === "object") {
+    // まず直接の配列プロパティを探す
+    for (const key of Object.keys(data)) {
+      if (Array.isArray(data[key]) && data[key].length > 0) {
+        return data[key];
+      }
+    }
+    // ネストされたオブジェクト内も探す
+    for (const key of Object.keys(data)) {
+      if (data[key] && typeof data[key] === "object" && !Array.isArray(data[key])) {
+        const found = extractTranslations(data[key]);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * OpenAI APIで歌詞を1行ずつ対訳
  * @param {string[]} lines - 歌詞の行配列
  * @param {string} apiKey - OpenAI APIキー
@@ -86,26 +114,18 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       }
 
       // レスポンスの形式に応じて対応
-      if (Array.isArray(parsed)) {
-        return parsed;
-      } else if (parsed.translations) {
-        return parsed.translations;
-      } else if (parsed.lyrics) {
-        return parsed.lyrics;
+      const result = extractTranslations(parsed);
+      if (result) {
+        return result;
       }
 
-      // オブジェクトの最初の配列プロパティを探す
-      for (const key of Object.keys(parsed)) {
-        if (Array.isArray(parsed[key])) {
-          return parsed[key];
-        }
-      }
-
+      console.log(`    ⚠️ レスポンス形式不明（キー: ${Object.keys(parsed).join(", ")}）`);
       throw new Error("予期しないレスポンス形式");
     } catch (error) {
       lastError = error;
       const isTimeout = error.code === 'ETIMEDOUT' || error.message.includes('timeout');
-      const isRetryable = isTimeout || error.status === 429 || error.status >= 500;
+      const isBadFormat = error.message.includes('予期しないレスポンス形式');
+      const isRetryable = isTimeout || isBadFormat || error.status === 429 || error.status >= 500;
 
       if (attempt < MAX_RETRIES && isRetryable) {
         const waitTime = attempt * 5000; // 5秒、10秒、15秒と増加

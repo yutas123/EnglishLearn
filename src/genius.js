@@ -1,46 +1,73 @@
 import * as cheerio from "cheerio";
 
-const GENIUS_API_URL = "https://api.genius.com";
-
 /**
- * 文字列を正規化（比較用）
+ * Geniusアルバムページをスクレイピングしてアルバム情報を取得
+ * @param {string} albumUrl - GeniusアルバムページURL (例: https://genius.com/albums/Artist/Album-name)
+ * @returns {Promise<{albumName: string, artistName: string, coverArtUrl: string, geniusUrl: string, tracks: Array<{trackNo: number, title: string, songUrl: string}>}>}
  */
-function normalize(str) {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/**
- * Genius APIで曲を検索し、歌詞ページURLを取得
- */
-async function searchSong(artist, title, accessToken) {
-  const query = encodeURIComponent(`${artist} ${title}`);
-  const url = `${GENIUS_API_URL}/search?q=${query}&per_page=10`;
-
-  const res = await fetch(url, {
+export async function scrapeAlbumPage(albumUrl) {
+  const res = await fetch(albumUrl, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     },
   });
 
-  const data = await res.json();
-
-  if (!data.response.hits || data.response.hits.length === 0) {
-    return null;
+  if (!res.ok) {
+    throw new Error(`アルバムページの取得に失敗しました (${res.status}): ${albumUrl}`);
   }
 
-  // 検索結果から曲名が完全一致するものを探す
-  const targetTitle = normalize(title);
-  for (const hit of data.response.hits) {
-    const resultTitle = normalize(hit.result.title);
-    if (resultTitle === targetTitle) {
-      return hit.result.url;
+  const html = await res.text();
+  const $ = cheerio.load(html);
+
+  // アルバム名
+  const albumName = $(".header_with_cover_art-primary_info-title").text().trim();
+  if (!albumName) {
+    throw new Error("アルバム名を取得できませんでした");
+  }
+
+  // アーティスト名
+  const artistName = $(".header_with_cover_art-primary_info-primary_artist").text().trim();
+
+  // ジャケット画像URL (og:imageから高解像度版を取得)
+  const coverArtUrl = $('meta[property="og:image"]').attr("content") || null;
+
+  // トラックリスト
+  const tracks = [];
+  $(".chart_row").each((_, el) => {
+    const numberText = $(el).find(".chart_row-number_container-number").text().trim();
+    const trackNo = parseInt(numberText, 10);
+    if (isNaN(trackNo)) return; // ボーナストラック等（番号なし）はスキップ
+
+    const title = $(el)
+      .find(".chart_row-content-title")
+      .first()
+      .contents()
+      .filter(function () {
+        return this.type === "text";
+      })
+      .text()
+      .trim();
+
+    const songUrl = $(el).find("a.u-display_block").attr("href") ||
+      $(el).find("a").first().attr("href") || "";
+
+    if (title && songUrl) {
+      tracks.push({ trackNo, title, songUrl });
     }
+  });
+
+  if (tracks.length === 0) {
+    throw new Error("トラックリストを取得できませんでした");
   }
 
-  // 一致するものがなければnull
-  return null;
+  return {
+    albumName,
+    artistName,
+    coverArtUrl,
+    geniusUrl: albumUrl,
+    tracks,
+  };
 }
 
 /**
@@ -116,71 +143,16 @@ function parseLyricsToLines(lyrics) {
 }
 
 /**
- * Genius APIでアルバムURLを取得
- * 最初のヒット曲の詳細からアルバム情報を取得する
- * @param {string} artist - アーティスト名
- * @param {string} albumName - アルバム名
- * @param {string} accessToken - Genius APIトークン
- * @returns {Promise<string|null>} GeniusアルバムページURL、見つからない場合はnull
+ * 曲ページURLから直接歌詞を取得
+ * @param {string} songUrl - Genius曲ページURL
+ * @returns {Promise<string[]|null>} 歌詞の行配列、取得できない場合はnull
  */
-export async function getAlbumUrl(artist, albumName, accessToken) {
+export async function getLyricsFromUrl(songUrl) {
   try {
-    const query = encodeURIComponent(`${artist} ${albumName}`);
-    const url = `${GENIUS_API_URL}/search?q=${query}&per_page=5`;
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const data = await res.json();
-
-    if (!data.response.hits || data.response.hits.length === 0) {
-      return null;
-    }
-
-    // 検索結果からアーティストが一致するヒットを探す
-    const targetArtist = normalize(artist);
-    const hit = data.response.hits.find(
-      (h) => normalize(h.result.primary_artist.name) === targetArtist
-    );
-
-    if (!hit) return null;
-
-    // 曲の詳細からアルバム情報を取得
-    const songId = hit.result.id;
-    const songRes = await fetch(`${GENIUS_API_URL}/songs/${songId}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const songData = await songRes.json();
-
-    const album = songData.response.song.album;
-    if (album && album.url) {
-      return album.url;
-    }
-
-    return null;
-  } catch (error) {
-    console.log(`    ⚠️ Geniusアルバム検索エラー: ${error.message}`);
-    return null;
-  }
-}
-
-/**
- * アーティスト名と曲名から歌詞を取得
- * @returns {string[]|null} 歌詞の行配列、見つからない場合はnull
- */
-export async function getLyrics(artist, title, accessToken) {
-  try {
-    const songUrl = await searchSong(artist, title, accessToken);
-
-    if (!songUrl) {
-      console.log(`    ⚠️ Geniusで見つかりませんでした: ${title}`);
-      return null;
-    }
-
     const lyrics = await scrapeLyrics(songUrl);
 
     if (!lyrics) {
-      console.log(`    ⚠️ 歌詞を取得できませんでした: ${title}`);
+      console.log(`    ⚠️ 歌詞を取得できませんでした: ${songUrl}`);
       return null;
     }
 

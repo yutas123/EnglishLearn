@@ -1,82 +1,55 @@
-import { searchRelease, getTrackList } from "./src/musicbrainz.js";
-import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum, addSongAnalysisToPage, updateAlbumGeniusLink } from "./src/notion.js";
-import { getLyrics, getAlbumUrl } from "./src/genius.js";
+import { scrapeAlbumPage, getLyricsFromUrl } from "./src/genius.js";
+import { createAlbum, createTrack, addLyricsToPage, addTrackListToAlbum, addSongAnalysisToPage } from "./src/notion.js";
 import { translateLyrics, generateSongAnalysis } from "./src/translator.js";
-import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
+import { OPENAI_API_KEY } from "./src/config.js";
 
 /**
  * ★ 入力はここだけ ★
  */
-const ARTIST_NAME = "The Kinks";
-const ALBUM_NAME = "The Kinks are the Village Green Preservation Society";
+const GENIUS_ALBUM_URL = "https://genius.com/albums/The-beatles/With-the-beatles";
 
 async function main() {
   try {
-    // APIキーの確認
-    if (!GENIUS_ACCESS_TOKEN) {
-      throw new Error("GENIUS_ACCESS_TOKEN が設定されていません");
-    }
     if (!OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY が設定されていません");
     }
 
-    console.log(`🔍 MusicBrainz 検索中: ${ARTIST_NAME} - ${ALBUM_NAME}`);
+    // ① Geniusアルバムページからアルバム情報+トラックリストを取得
+    console.log(`🔍 Geniusアルバムページを取得中: ${GENIUS_ALBUM_URL}`);
+    const album = await scrapeAlbumPage(GENIUS_ALBUM_URL);
+    console.log(`🎯 アルバム: ${album.artistName} - ${album.albumName}`);
+    console.log(`🎧 ${album.tracks.length} 曲取得`);
 
-    // ① Release検索
-    const { releaseId, albumTitle } = await searchRelease(
-      ARTIST_NAME,
-      ALBUM_NAME
-    );
-
-    console.log(`🎯 Release確定: ${albumTitle}`);
-    console.log(`🆔 Release ID: ${releaseId}`);
-
-    // ② トラック取得
-    const tracks = await getTrackList(releaseId);
-    console.log(`🎧 ${tracks.length} 曲取得`);
-
-    // ③ Notionにアルバム作成（ジャケット画像付き）
-    console.log(`📀 アルバム作成中: ${albumTitle}`);
-    const albumPageId = await createAlbum({ albumName: albumTitle, releaseId });
+    // ② Notionにアルバム作成（ジャケット画像+Geniusリンク付き）
+    console.log(`📀 アルバム作成中: ${album.albumName}`);
+    const albumPageId = await createAlbum({
+      albumName: album.albumName,
+      coverArtUrl: album.coverArtUrl,
+      geniusUrl: album.geniusUrl,
+    });
     console.log(`✅ アルバム作成完了 (ID: ${albumPageId})`);
 
-    // ③-2 GeniusアルバムURLを取得してNotionに保存
-    console.log(`🔗 Geniusアルバムリンクを検索中...`);
-    const geniusAlbumUrl = await getAlbumUrl(ARTIST_NAME, ALBUM_NAME, GENIUS_ACCESS_TOKEN);
-    if (geniusAlbumUrl) {
-      await updateAlbumGeniusLink(albumPageId, geniusAlbumUrl);
-      console.log(`✅ Geniusリンク設定完了: ${geniusAlbumUrl}`);
-    } else {
-      console.log(`⚠️ Geniusアルバムリンクが見つかりませんでした`);
-    }
+    // ③ 各トラックをNotionに登録 + 歌詞と対訳
+    const createdTracks = [];
 
-    // ④ 各トラックをNotionに登録（アルバムにリレーション）+ 歌詞と対訳
-    const createdTracks = []; // トラックリスト用に保存
-
-    for (const track of tracks) {
+    for (const track of album.tracks) {
       console.log(`  → 登録中: ${track.trackNo}. ${track.title}`);
 
-      // トラック作成
       const trackPageId = await createTrack({
         title: track.title,
         trackNo: track.trackNo,
         albumPageId: albumPageId,
       });
 
-      // トラックリスト用に保存
       createdTracks.push({
         trackNo: track.trackNo,
         title: track.title,
         pageId: trackPageId,
       });
 
-      // 歌詞取得
+      // 歌詞取得（曲ページURLから直接スクレイピング）
       console.log(`    📝 歌詞を取得中...`);
-      const lyrics = await getLyrics(
-        ARTIST_NAME,
-        track.title,
-        GENIUS_ACCESS_TOKEN
-      );
+      const lyrics = await getLyricsFromUrl(track.songUrl);
 
       if (lyrics && lyrics.length > 0) {
         console.log(`    🌐 対訳を生成中... (${lyrics.length}行)`);
@@ -90,7 +63,7 @@ async function main() {
         const analysis = await generateSongAnalysis(
           lyrics,
           track.title,
-          ARTIST_NAME,
+          album.artistName,
           OPENAI_API_KEY
         );
         if (analysis) {
@@ -104,7 +77,7 @@ async function main() {
       await sleep(1000);
     }
 
-    // ⑤ アルバムページにトラックリストを追加
+    // ④ アルバムページにトラックリストを追加
     console.log(`📋 アルバムページにトラックリストを追加中...`);
     await addTrackListToAlbum(albumPageId, createdTracks);
 
