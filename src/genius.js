@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { SCRAPER_API_KEY } from "./config.js";
 
 const GENIUS_API_URL = "https://api.genius.com";
 
@@ -47,11 +48,14 @@ async function searchSong(artist, title, accessToken) {
  * GeniusのページURLから歌詞をスクレイピング
  */
 async function scrapeLyrics(url) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
+  const fetchUrl = SCRAPER_API_KEY
+    ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}`
+    : url;
+
+  const res = await fetch(fetchUrl, {
+    headers: SCRAPER_API_KEY
+      ? {}
+      : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
   });
 
   const html = await res.text();
