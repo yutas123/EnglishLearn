@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 
 const MAX_RETRIES = 3;
-const TIMEOUT_MS = 60000; // 60秒
+const TIMEOUT_MS = 180000; // 180秒
+const CHUNK_SIZE = 40; // 1回のAPI呼び出しで処理する最大行数
 
 /**
  * 指定ミリ秒待機
@@ -11,14 +12,12 @@ function sleep(ms) {
 }
 
 /**
- * OpenAI APIで歌詞を1行ずつ対訳
- * @param {string[]} lines - 歌詞の行配列
- * @param {string} apiKey - OpenAI APIキー
- * @returns {Array<{original: string, translation: string}>} 対訳配列
+ * OpenAI APIで歌詞チャンクを対訳（内部関数）
+ * @param {OpenAI} openai - OpenAIクライアント
+ * @param {string[]} lines - 歌詞の行配列（チャンク）
+ * @returns {Array<{original: string, translation: string, explanation: string}>}
  */
-export async function translateLyrics(lines, apiKey) {
-  const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
-
+async function translateChunk(openai, lines) {
   const prompt = `【英語学習ノート作成 - 対訳と表現解説】
 
 私は英語学習者です。以下の英文フレーズについて、学習ノートを作成しています。
@@ -111,7 +110,6 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       // キー名を正規化（GPTが異なるキー名を返す場合に対応）
       const normalized = items.map((item) => {
         const values = Object.values(item);
-        // 3つの値がある場合: 順番で original, translation, explanation と推定
         if (values.length >= 2) {
           return {
             original: String(values[0] || ""),
@@ -136,21 +134,57 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       const isRetryable = isTimeout || isBadResult || error.status === 429 || error.status >= 500;
 
       if (attempt < MAX_RETRIES && isRetryable) {
-        const waitTime = attempt * 5000; // 5秒、10秒、15秒と増加
+        const waitTime = attempt * 5000;
         console.log(`    ⚠️ リトライ ${attempt}/${MAX_RETRIES}: ${error.message} (${waitTime / 1000}秒後に再試行)`);
         await sleep(waitTime);
         continue;
       }
 
-      console.log(`    ⚠️ 翻訳エラー: ${error.message}`);
+      console.log(`    ⚠️ 翻訳エラー (チャンク): ${error.message}`);
       // フォールバック：原文のみ返す
-      return lines.map((line) => ({ original: line, translation: "" }));
+      return lines.map((line) => ({ original: line, translation: "", explanation: "" }));
     }
   }
 
-  // ここには到達しないはずだが念のため
-  console.log(`    ⚠️ 翻訳エラー: ${lastError?.message}`);
-  return lines.map((line) => ({ original: line, translation: "" }));
+  console.log(`    ⚠️ 翻訳エラー (チャンク): ${lastError?.message}`);
+  return lines.map((line) => ({ original: line, translation: "", explanation: "" }));
+}
+
+/**
+ * OpenAI APIで歌詞を対訳（長い歌詞は自動分割）
+ * @param {string[]} lines - 歌詞の行配列
+ * @param {string} apiKey - OpenAI APIキー
+ * @returns {Array<{original: string, translation: string, explanation: string}>} 対訳配列
+ */
+export async function translateLyrics(lines, apiKey) {
+  const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
+
+  // CHUNK_SIZE以下ならそのまま処理
+  if (lines.length <= CHUNK_SIZE) {
+    return translateChunk(openai, lines);
+  }
+
+  // 分割して順次処理
+  const totalChunks = Math.ceil(lines.length / CHUNK_SIZE);
+  console.log(`    📦 ${lines.length}行を${totalChunks}分割で翻訳します`);
+
+  const allResults = [];
+
+  for (let i = 0; i < lines.length; i += CHUNK_SIZE) {
+    const chunk = lines.slice(i, i + CHUNK_SIZE);
+    const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
+    console.log(`    📦 チャンク ${chunkIndex}/${totalChunks} (${chunk.length}行)`);
+
+    const results = await translateChunk(openai, chunk);
+    allResults.push(...results);
+
+    // チャンク間の待機（API制限対策）
+    if (i + CHUNK_SIZE < lines.length) {
+      await sleep(1000);
+    }
+  }
+
+  return allResults;
 }
 
 /**
