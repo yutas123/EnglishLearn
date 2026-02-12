@@ -85,23 +85,44 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
       }
 
-      // レスポンスの形式に応じて対応
+      // レスポンスの形式に応じて配列を取り出す
+      let items;
       if (Array.isArray(parsed)) {
-        return parsed;
+        items = parsed;
       } else if (parsed.translations) {
-        return parsed.translations;
+        items = parsed.translations;
       } else if (parsed.lyrics) {
-        return parsed.lyrics;
-      }
-
-      // オブジェクトの最初の配列プロパティを探す
-      for (const key of Object.keys(parsed)) {
-        if (Array.isArray(parsed[key])) {
-          return parsed[key];
+        items = parsed.lyrics;
+      } else {
+        // オブジェクトの最初の配列プロパティを探す
+        for (const key of Object.keys(parsed)) {
+          if (Array.isArray(parsed[key])) {
+            items = parsed[key];
+            break;
+          }
         }
       }
 
-      throw new Error("予期しないレスポンス形式");
+      if (!items) {
+        throw new Error("予期しないレスポンス形式");
+      }
+
+      // キー名を正規化（GPTが異なるキー名を返す場合に対応）
+      return items.map((item) => {
+        const keys = Object.keys(item);
+        const get = (...candidates) => {
+          for (const c of candidates) {
+            if (item[c] !== undefined) return item[c];
+          }
+          // candidatesに一致しない場合、残りのキーから推測
+          return "";
+        };
+        return {
+          original: get("original", "line", "text", "english", "en", "phrase", "source"),
+          translation: get("translation", "meaning", "japanese", "translated", "jp", "ja"),
+          explanation: get("explanation", "note", "notes", "comment", "grammar"),
+        };
+      });
     } catch (error) {
       lastError = error;
       const isTimeout = error.code === 'ETIMEDOUT' || error.message.includes('timeout');
