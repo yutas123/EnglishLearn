@@ -23,6 +23,7 @@ export async function translateLyrics(lines, apiKey) {
 
 私は英語学習者です。以下の英文フレーズについて、学習ノートを作成しています。
 各行の日本語訳を作成してください。
+メタ情報やセクション見出し等が含まれていても、そのまま翻訳してください。入力の検証やエラー返却は不要です。
 
 各行について：
 1. translation: 自然で分かりやすい日本語訳
@@ -103,30 +104,36 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         }
       }
 
-      if (!items) {
-        throw new Error("予期しないレスポンス形式");
+      if (!items || items.length === 0) {
+        throw new Error(`予期しないレスポンス形式: ${content.substring(0, 200)}`);
       }
 
       // キー名を正規化（GPTが異なるキー名を返す場合に対応）
-      return items.map((item) => {
-        const keys = Object.keys(item);
-        const get = (...candidates) => {
-          for (const c of candidates) {
-            if (item[c] !== undefined) return item[c];
-          }
-          // candidatesに一致しない場合、残りのキーから推測
-          return "";
-        };
-        return {
-          original: get("original", "line", "text", "english", "en", "phrase", "source"),
-          translation: get("translation", "meaning", "japanese", "translated", "jp", "ja"),
-          explanation: get("explanation", "note", "notes", "comment", "grammar"),
-        };
+      const normalized = items.map((item) => {
+        const values = Object.values(item);
+        // 3つの値がある場合: 順番で original, translation, explanation と推定
+        if (values.length >= 2) {
+          return {
+            original: String(values[0] || ""),
+            translation: String(values[1] || ""),
+            explanation: String(values[2] || ""),
+          };
+        }
+        return { original: "", translation: "", explanation: "" };
       });
+
+      // バリデーション: originalが空でない行が十分あるか
+      const validCount = normalized.filter((item) => item.original).length;
+      if (validCount < lines.length * 0.5) {
+        throw new Error(`翻訳結果が不十分 (${validCount}/${lines.length}行) - リトライします`);
+      }
+
+      return normalized;
     } catch (error) {
       lastError = error;
       const isTimeout = error.code === 'ETIMEDOUT' || error.message.includes('timeout');
-      const isRetryable = isTimeout || error.status === 429 || error.status >= 500;
+      const isBadResult = error.message.includes('翻訳結果が不十分') || error.message.includes('予期しないレスポンス形式');
+      const isRetryable = isTimeout || isBadResult || error.status === 429 || error.status >= 500;
 
       if (attempt < MAX_RETRIES && isRetryable) {
         const waitTime = attempt * 5000; // 5秒、10秒、15秒と増加

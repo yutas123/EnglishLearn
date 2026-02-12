@@ -12,11 +12,11 @@ import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./src/config.js";
  *   - title: 曲名（Genius検索用）
  *   - notionPageId: 既存のNotionトラックページID
  */
-const ARTIST_NAME = "The Kinks";
+const ARTIST_NAME = "Elliott Smith";
 const TRACKS = [
   {
-    title: "Starstruck",
-    notionPageId: "2fdf43a6c5f8819db6baec60dc5fba02",
+    title: "Southern Belle",
+    notionPageId: "2fdf43a6c5f881f2b94dc15de765a64d",
   },
   // 複数曲ある場合は追加
   // {
