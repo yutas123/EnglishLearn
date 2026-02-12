@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EnglishLearn — 歌詞翻訳ツール</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 1.5rem;
+      color: #fff;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 0;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.7rem 1rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      cursor: pointer;
+      font-size: 0.95rem;
+      text-align: center;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .tab:first-child { border-radius: 8px 0 0 0; }
+    .tab:last-child { border-radius: 0 8px 0 0; }
+
+    .tab.active {
+      background: #1e1e1e;
+      color: #fff;
+      border-bottom-color: #1e1e1e;
+    }
+
+    .panel {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .panel[hidden] { display: none; }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 0.3rem;
+      margin-top: 1rem;
+    }
+
+    label:first-child { margin-top: 0; }
+
+    input, textarea {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background: #111;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #666;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 0.85rem;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 0.3rem;
+    }
+
+    button {
+      margin-top: 1.2rem;
+      width: 100%;
+      padding: 0.7rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    #log-container {
+      margin-top: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #log-container[hidden] { display: none; }
+
+    #log-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+      color: #aaa;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #444;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #log {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-line { color: #aaa; }
+    .log-line.error { color: #ef4444; }
+    .log-line.done { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <h1>EnglishLearn</h1>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="album">Album Mode</div>
+    <div class="tab" data-tab="track">Track Mode</div>
+  </div>
+
+  <!-- Album Mode -->
+  <div class="panel" id="panel-album">
+    <label for="album-artist">Artist Name</label>
+    <input id="album-artist" type="text" placeholder="e.g. Elliott Smith">
+
+    <label for="album-name">Album Name</label>
+    <input id="album-name" type="text" placeholder="e.g. Either/Or">
+
+    <button id="btn-album">Run</button>
+  </div>
+
+  <!-- Track Mode -->
+  <div class="panel" id="panel-track" hidden>
+    <label for="track-artist">Artist Name</label>
+    <input id="track-artist" type="text" placeholder="e.g. Elliott Smith">
+
+    <label for="track-title">Song Title</label>
+    <input id="track-title" type="text" placeholder="e.g. Between the Bars">
+
+    <label for="track-page-id">Notion Page ID</label>
+    <input id="track-page-id" type="text" placeholder="e.g. 2fdf43a6c5f881f2b94dc15de765a64d">
+
+    <button id="btn-track">Run</button>
+  </div>
+
+  <!-- Log -->
+  <div id="log-container" hidden>
+    <div id="log-header">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-text">実行中...</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    // --- Tab switching ---
+    const tabs = document.querySelectorAll(".tab");
+    const panels = {
+      album: document.getElementById("panel-album"),
+      track: document.getElementById("panel-track"),
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        tabs.forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const target = tab.dataset.tab;
+        Object.entries(panels).forEach(([key, panel]) => {
+          panel.hidden = key !== target;
+        });
+      });
+    });
+
+    // --- Log display ---
+    const logContainer = document.getElementById("log-container");
+    const logEl = document.getElementById("log");
+    const spinner = document.getElementById("spinner");
+    const statusText = document.getElementById("status-text");
+    const btnAlbum = document.getElementById("btn-album");
+    const btnTrack = document.getElementById("btn-track");
+
+    let eventSource = null;
+
+    function setRunning(running) {
+      btnAlbum.disabled = running;
+      btnTrack.disabled = running;
+      logContainer.hidden = false;
+      spinner.style.display = running ? "block" : "none";
+      statusText.textContent = running ? "実行中..." : "";
+    }
+
+    function appendLog(msg, cls = "") {
+      const line = document.createElement("div");
+      line.className = "log-line" + (cls ? " " + cls : "");
+      line.textContent = msg;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function startSSE(url) {
+      // 前回のログをクリア
+      logEl.innerHTML = "";
+      setRunning(true);
+
+      eventSource = new EventSource(url);
+
+      eventSource.addEventListener("log", (e) => {
+        const data = JSON.parse(e.data);
+        appendLog(data.message);
+      });
+
+      eventSource.addEventListener("done", (e) => {
+        appendLog("--- 完了 ---", "done");
+        statusText.textContent = "完了";
+        finish();
+      });
+
+      eventSource.addEventListener("error", (e) => {
+        // SSE error event without data = connection error
+        if (e.data) {
+          const data = JSON.parse(e.data);
+          appendLog("エラー: " + data.message, "error");
+        }
+        statusText.textContent = "エラー";
+        finish();
+      });
+    }
+
+    function finish() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      setRunning(false);
+    }
+
+    // --- Album Mode ---
+    btnAlbum.addEventListener("click", () => {
+      const artist = document.getElementById("album-artist").value.trim();
+      const album = document.getElementById("album-name").value.trim();
+      if (!artist || !album) return alert("Artist Name と Album Name を入力してください");
+
+      const params = new URLSearchParams({ artist, album });
+      startSSE("/api/album?" + params.toString());
+    });
+
+    // --- Track Mode ---
+    btnTrack.addEventListener("click", () => {
+      const artist = document.getElementById("track-artist").value.trim();
+      const title = document.getElementById("track-title").value.trim();
+      const pageId = document.getElementById("track-page-id").value.trim();
+      if (!artist || !title || !pageId) return alert("全ての項目を入力してください");
+
+      const tracks = JSON.stringify([{ title, notionPageId: pageId }]);
+      const params = new URLSearchParams({ artist, tracks });
+      startSSE("/api/tracks?" + params.toString());
+    });
+  </script>
+</body>
+</html>
