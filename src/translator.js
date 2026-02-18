@@ -42,11 +42,11 @@ async function translateChunk(openai, lines) {
 普通の文や、基本的な単語・文法で理解できる行には解説は不要です（空文字にしてください）。
 同じ表現・文法パターンが曲中で繰り返し登場する場合、解説は最初の1回のみとし、2回目以降は空文字にしてください。
 
-JSON形式で出力：
-[
+以下のJSON形式で出力（必ずこの形式を守ってください）：
+{"translations": [
   {"original": "フレーズ1", "translation": "日本語訳1", "explanation": ""},
   {"original": "フレーズ2", "translation": "日本語訳2", "explanation": "特殊な表現の解説"}
-]
+]}
 
 フレーズ一覧：
 ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
@@ -68,7 +68,6 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
             content: prompt,
           },
         ],
-        temperature: 0.3,
         response_format: { type: "json_object" },
       });
 
@@ -235,7 +234,6 @@ ${lyricsText}`;
             content: prompt,
           },
         ],
-        temperature: 0.7,
       });
 
       const content = response.choices[0].message.content;
