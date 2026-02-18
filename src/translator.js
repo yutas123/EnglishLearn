@@ -56,7 +56,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-5-mini",
         messages: [
           {
             role: "system",
@@ -75,11 +75,11 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       const content = response.choices[0].message.content;
       const parsed = JSON.parse(content);
 
-      // コスト表示（gpt-5.2 の価格: 入力 $1.75/1M tokens, 出力 $14.00/1M tokens）
+      // コスト表示（gpt-5-mini の価格: 入力 $0.25/1M tokens, 出力 $2.00/1M tokens）
       const usage = response.usage;
       if (usage) {
-        const inputCost = (usage.prompt_tokens / 1_000_000) * 1.75;
-        const outputCost = (usage.completion_tokens / 1_000_000) * 14.00;
+        const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
+        const outputCost = (usage.completion_tokens / 1_000_000) * 2.00;
         const totalCost = inputCost + outputCost;
         const totalCostYen = totalCost * 150; // 1ドル=150円換算
         console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
@@ -223,7 +223,7 @@ ${lyricsText}`;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-5-mini",
         messages: [
           {
             role: "system",
@@ -243,8 +243,8 @@ ${lyricsText}`;
       // コスト表示
       const usage = response.usage;
       if (usage) {
-        const inputCost = (usage.prompt_tokens / 1_000_000) * 1.75;
-        const outputCost = (usage.completion_tokens / 1_000_000) * 14.0;
+        const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
+        const outputCost = (usage.completion_tokens / 1_000_000) * 2.0;
         const totalCost = inputCost + outputCost;
         const totalCostYen = totalCost * 150;
         console.log(
