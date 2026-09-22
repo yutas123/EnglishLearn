@@ -1,2 +1,10 @@
 node_modules/
 .env
+.env.local
+
+# Next.js
+frontend/.next/
+frontend/next-env.d.ts
+
+# Prisma
+**/generated/

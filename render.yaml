@@ -1,17 +1,28 @@
 services:
   - type: web
-    name: english-learn
+    name: english-learn-backend
     runtime: node
-    buildCommand: npm install
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate
     startCommand: node server.js
     envVars:
-      - key: NOTION_TOKEN
-        sync: false
-      - key: ALBUM_DB_ID
-        sync: false
-      - key: TRACK_DB_ID
+      - key: DATABASE_URL
         sync: false
       - key: GENIUS_ACCESS_TOKEN
         sync: false
       - key: OPENAI_API_KEY
+        sync: false
+      - key: SCRAPER_API_KEY
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_REFRESH_TOKEN
+        sync: false
+      - key: VERCEL_REVALIDATE_URL
+        sync: false
+      - key: VERCEL_REVALIDATE_SECRET
+        sync: false
+      - key: FRONTEND_ORIGIN
         sync: false

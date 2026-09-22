@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fafaf9;
+  --fg: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+mark.highlight {
+  background: transparent;
+  color: #ef4444;
+  font-weight: 600;
+}

@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Album {
+  id          String   @id @default(cuid())
+  artistName  String
+  albumTitle  String
+  releaseId   String? // MusicBrainz Release ID
+  coverArtUrl String?
+  geniusUrl   String?
+  createdAt   DateTime @default(now())
+  tracks      Track[]
+
+  @@unique([artistName, albumTitle])
+}
+
+model Track {
+  id           String        @id @default(cuid())
+  albumId      String
+  album        Album         @relation(fields: [albumId], references: [id])
+  trackNo      Int
+  title        String
+  analysis     String? // 楽曲解説（generateSongAnalysis の出力）
+  translations Translation[]
+  highlights   Highlight[]
+  createdAt    DateTime      @default(now())
+}
+
+model Translation {
+  id          String  @id @default(cuid())
+  trackId     String
+  track       Track   @relation(fields: [trackId], references: [id])
+  lineIndex   Int // 行番号（表示順）
+  original    String
+  translation String
+  explanation String? // LLMによる自動解説（倒置・イディオム等）
+}
+
+model Highlight {
+  id          String   @id @default(cuid())
+  trackId     String
+  track       Track    @relation(fields: [trackId], references: [id])
+  lineIndex   Int
+  startOffset Int // original文字列内の開始位置
+  endOffset   Int
+  createdAt   DateTime @default(now())
+}
+
+model Job {
+  id           String   @id @default(cuid())
+  type         String // "album" 固定でよい
+  artistName   String
+  albumName    String
+  status       String // pending / running / done / error
+  progressLog  String? // 直近の進捗メッセージ（任意）
+  errorMessage String?
+  albumId      String? // 完了時にVercelのrevalidatePathへ渡すために保持
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
