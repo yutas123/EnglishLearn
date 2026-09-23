@@ -114,11 +114,17 @@ async function scrapeLyrics(url) {
 
       lyrics = lyrics.trim();
 
-      // Geniusは歌詞コンテナの先頭に「n Contributors...曲名 Lyrics」という
-      // 前置き文言を挿入する。「Lyrics」の最初の出現以降を本文として扱うことで除去する
-      const lyricsMarkerIndex = lyrics.indexOf("Lyrics");
-      if (lyricsMarkerIndex !== -1) {
-        lyrics = lyrics.slice(lyricsMarkerIndex + "Lyrics".length).trimStart();
+      // Geniusは歌詞コンテナの先頭に「n Contributors...曲名 Lyrics」＋
+      // （曲の説明文がある場合）「説明文… Read More」を挿入してから実際の歌詞を続ける。
+      // 「Read More」があればその直後から、無ければ「Lyrics」の直後から本文として扱う
+      const readMoreIndex = lyrics.indexOf("Read More");
+      if (readMoreIndex !== -1) {
+        lyrics = lyrics.slice(readMoreIndex + "Read More".length).trimStart();
+      } else {
+        const lyricsMarkerIndex = lyrics.indexOf("Lyrics");
+        if (lyricsMarkerIndex !== -1) {
+          lyrics = lyrics.slice(lyricsMarkerIndex + "Lyrics".length).trimStart();
+        }
       }
 
       return lyrics;
