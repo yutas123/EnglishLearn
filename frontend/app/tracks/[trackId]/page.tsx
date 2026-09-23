@@ -39,34 +39,12 @@ export default async function TrackPage({
 
   return (
     <main className="flex flex-col gap-6">
-      <nav className="flex items-center justify-between gap-2 text-sm font-medium">
-        {prevTrack ? (
-          <Link
-            href={`/tracks/${prevTrack.id}`}
-            className="truncate hover:underline"
-          >
-            ← 前の曲
-          </Link>
-        ) : (
-          <span />
-        )}
-        <Link
-          href={`/albums/${track.albumId}`}
-          className="truncate text-zinc-500 hover:underline"
-        >
-          {track.album.albumTitle}
-        </Link>
-        {nextTrack ? (
-          <Link
-            href={`/tracks/${nextTrack.id}`}
-            className="truncate hover:underline"
-          >
-            次の曲 →
-          </Link>
-        ) : (
-          <span />
-        )}
-      </nav>
+      <Link
+        href={`/albums/${track.albumId}`}
+        className="w-fit truncate text-sm text-zinc-500 hover:underline"
+      >
+        ← {track.album.albumTitle}
+      </Link>
 
       <header>
         <h1 className="break-words text-xl font-bold">{track.title}</h1>
@@ -91,6 +69,29 @@ export default async function TrackPage({
       ) : (
         <LyricsList lines={track.translations} />
       )}
+
+      <nav className="flex items-center justify-between gap-2 border-t border-zinc-200 pt-4 text-sm font-medium">
+        {prevTrack ? (
+          <Link
+            href={`/tracks/${prevTrack.id}`}
+            className="truncate hover:underline"
+          >
+            ← 前の曲
+          </Link>
+        ) : (
+          <span />
+        )}
+        {nextTrack ? (
+          <Link
+            href={`/tracks/${nextTrack.id}`}
+            className="truncate hover:underline"
+          >
+            次の曲 →
+          </Link>
+        ) : (
+          <span />
+        )}
+      </nav>
     </main>
   );
 }
