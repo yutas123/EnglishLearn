@@ -88,7 +88,7 @@ export default function LyricsList({
   const [popup, setPopup] = useState<PopupState>({ mode: "menu" });
 
   useEffect(() => {
-    function handleMouseUp() {
+    function evaluateSelection() {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
 
@@ -116,18 +116,33 @@ export default function LyricsList({
       setPopup({ mode: "menu" });
     }
 
-    function handleMouseDown(e: MouseEvent) {
-      // ポップアップ自身のクリックは無視（メニュー選択操作のため）
+    // PC: mouseupで即座に反応
+    function handleMouseUp() {
+      evaluateSelection();
+    }
+
+    // スマホ: 選択ハンドルのドラッグではmouseup/touchendが確実に発火しないため、
+    // selectionchangeを正としてデバウンスしながら監視する
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    function handleSelectionChange() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(evaluateSelection, 200);
+    }
+
+    // ポインタダウン（マウス/タッチ/ペン共通）で新しい選択操作が始まったらポップアップを一旦閉じる
+    function handlePointerDown(e: PointerEvent) {
       if ((e.target as HTMLElement)?.closest("[data-vocab-popup]")) return;
-      // 新しい選択が始まったら一旦閉じる（mouseupで再表示される）
       setSelection(null);
     }
 
     document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerdown", handlePointerDown);
     return () => {
       document.removeEventListener("mouseup", handleMouseUp);
-      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, []);
 
@@ -215,8 +230,8 @@ export default function LyricsList({
           data-vocab-popup
           className="fixed z-50 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-lg"
           style={{
-            top: selection.rect.bottom + 8,
-            left: Math.max(8, selection.rect.left),
+            top: Math.min(selection.rect.bottom + 8, window.innerHeight - 160),
+            left: Math.min(Math.max(8, selection.rect.left), window.innerWidth - 280 - 8),
             maxWidth: 280,
           }}
         >
