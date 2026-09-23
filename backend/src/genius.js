@@ -2,6 +2,11 @@ import * as cheerio from "cheerio";
 import { SCRAPER_API_KEY } from "./config.js";
 
 const GENIUS_API_URL = "https://api.genius.com";
+const MAX_RETRIES = 3;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * 文字列を正規化（比較用）
@@ -14,80 +19,122 @@ function normalize(str) {
 
 /**
  * Genius APIで曲を検索し、歌詞ページURLを取得
+ * ネットワーク一時エラーは数回リトライする
  */
 async function searchSong(artist, title, accessToken) {
   const query = encodeURIComponent(`${artist} ${title}`);
   const url = `${GENIUS_API_URL}/search?q=${query}&per_page=10`;
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
-  const data = await res.json();
+      if (!res.ok) {
+        throw new Error(`Genius検索APIがエラーを返しました (status ${res.status})`);
+      }
 
-  if (!data.response.hits || data.response.hits.length === 0) {
-    return null;
-  }
+      const data = await res.json();
 
-  // 検索結果から曲名が完全一致するものを探す
-  const targetTitle = normalize(title);
-  for (const hit of data.response.hits) {
-    const resultTitle = normalize(hit.result.title);
-    if (resultTitle === targetTitle) {
-      return hit.result.url;
+      if (!data.response || !data.response.hits) {
+        throw new Error("Genius検索APIのレスポンス形式が不正です");
+      }
+
+      if (data.response.hits.length === 0) {
+        return null; // 本当に見つからない（リトライ不要）
+      }
+
+      // 検索結果から曲名が完全一致するものを探す
+      const targetTitle = normalize(title);
+      for (const hit of data.response.hits) {
+        const resultTitle = normalize(hit.result.title);
+        if (resultTitle === targetTitle) {
+          return hit.result.url;
+        }
+      }
+
+      // 一致するものがなければnull（リトライ不要）
+      return null;
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        const waitMs = attempt * 2000;
+        console.log(`    ⚠️ Genius検索リトライ ${attempt}/${MAX_RETRIES}: ${error.message} (${waitMs / 1000}秒後に再試行)`);
+        await sleep(waitMs);
+        continue;
+      }
+      console.log(`    ⚠️ Genius検索に失敗しました: ${error.message}`);
+      return null;
     }
   }
 
-  // 一致するものがなければnull
   return null;
 }
 
 /**
  * GeniusのページURLから歌詞をスクレイピング
+ * ScraperAPI/Genius側の一時的な取得失敗は数回リトライする
  */
 async function scrapeLyrics(url) {
   const fetchUrl = SCRAPER_API_KEY
     ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}`
     : url;
 
-  const res = await fetch(fetchUrl, {
-    headers: SCRAPER_API_KEY
-      ? {}
-      : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-  });
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(fetchUrl, {
+        headers: SCRAPER_API_KEY
+          ? {}
+          : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      });
 
-  const html = await res.text();
-  const $ = cheerio.load(html);
+      if (!res.ok) {
+        throw new Error(`歌詞ページの取得に失敗しました (status ${res.status})`);
+      }
 
-  // Geniusの歌詞コンテナを取得
-  const lyricsContainers = $('[data-lyrics-container="true"]');
+      const html = await res.text();
+      const $ = cheerio.load(html);
 
-  if (lyricsContainers.length === 0) {
-    return null;
+      // Geniusの歌詞コンテナを取得
+      const lyricsContainers = $('[data-lyrics-container="true"]');
+
+      if (lyricsContainers.length === 0) {
+        throw new Error("歌詞コンテナが見つかりません（一時的な取得失敗の可能性）");
+      }
+
+      let lyrics = "";
+
+      lyricsContainers.each((_, container) => {
+        // <br>タグを改行に変換
+        $(container)
+          .find("br")
+          .replaceWith("\n");
+        lyrics += $(container).text() + "\n";
+      });
+
+      lyrics = lyrics.trim();
+
+      // Geniusは歌詞コンテナの先頭に「n Contributors...曲名 Lyrics」という
+      // 前置き文言を挿入する。「Lyrics」の最初の出現以降を本文として扱うことで除去する
+      const lyricsMarkerIndex = lyrics.indexOf("Lyrics");
+      if (lyricsMarkerIndex !== -1) {
+        lyrics = lyrics.slice(lyricsMarkerIndex + "Lyrics".length).trimStart();
+      }
+
+      return lyrics;
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        const waitMs = attempt * 2000;
+        console.log(`    ⚠️ 歌詞ページ取得リトライ ${attempt}/${MAX_RETRIES}: ${error.message} (${waitMs / 1000}秒後に再試行)`);
+        await sleep(waitMs);
+        continue;
+      }
+      console.log(`    ⚠️ 歌詞ページの取得に失敗しました: ${error.message}`);
+      return null;
+    }
   }
 
-  let lyrics = "";
-
-  lyricsContainers.each((_, container) => {
-    // <br>タグを改行に変換
-    $(container)
-      .find("br")
-      .replaceWith("\n");
-    lyrics += $(container).text() + "\n";
-  });
-
-  lyrics = lyrics.trim();
-
-  // Geniusは歌詞コンテナの先頭に「n Contributors...曲名 Lyrics」という
-  // 前置き文言を挿入する。「Lyrics」の最初の出現以降を本文として扱うことで除去する
-  const lyricsMarkerIndex = lyrics.indexOf("Lyrics");
-  if (lyricsMarkerIndex !== -1) {
-    lyrics = lyrics.slice(lyricsMarkerIndex + "Lyrics".length).trimStart();
-  }
-
-  return lyrics;
+  return null;
 }
 
 /**
