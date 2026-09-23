@@ -7,14 +7,14 @@ const CHUNK_SIZE = 40; // 1回のAPI呼び出しで処理する最大行数
 /**
  * 指定ミリ秒待機
  */
-function sleep(ms) {
+export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * OpenAIのusageからコスト（ドル）を計算（gpt-5-mini価格: 入力$0.25/1M, 出力$2.00/1M）
  */
-function calcCostUsd(usage) {
+export function calcCostUsd(usage) {
   if (!usage) return 0;
   const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
   const outputCost = (usage.completion_tokens / 1_000_000) * 2.0;
@@ -52,10 +52,14 @@ async function translateChunk(openai, lines) {
 普通の文や、基本的な単語・文法で理解できる行には解説は不要です（空文字にしてください）。
 同じ表現・文法パターンが曲中で繰り返し登場する場合、解説は最初の1回のみとし、2回目以降は空文字にしてください。
 
+3. hardSpans: explanationを記載した行についてのみ、その行の原文(original)の中で解説対象となった
+   部分文字列をそのまま配列で返してください（文字位置ではなく、原文からそのまま抜き出した文字列）。
+   explanationが空文字の行はhardSpansも空配列にしてください。
+
 以下のJSON形式で出力（必ずこの形式を守ってください）：
 {"translations": [
-  {"original": "フレーズ1", "translation": "日本語訳1", "explanation": ""},
-  {"original": "フレーズ2", "translation": "日本語訳2", "explanation": "特殊な表現の解説"}
+  {"original": "フレーズ1", "translation": "日本語訳1", "explanation": "", "hardSpans": []},
+  {"original": "フレーズ2", "translation": "日本語訳2", "explanation": "特殊な表現の解説", "hardSpans": ["該当箇所"]}
 ]}
 
 フレーズ一覧：
@@ -114,17 +118,32 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         throw new Error(`予期しないレスポンス形式: ${content.substring(0, 200)}`);
       }
 
-      // キー名を正規化（GPTが異なるキー名を返す場合に対応）
+      // キー名を正規化（GPTが異なるキー名を返す場合に対応。キー名を優先し、
+      // 無い場合のみ値の並び順にフォールバックする＝hardSpans追加後も既存フィールドの
+      // 取り違えが起きないようにする）
       const normalized = items.map((item) => {
         const values = Object.values(item);
-        if (values.length >= 2) {
-          return {
-            original: String(values[0] || ""),
-            translation: String(values[1] || ""),
-            explanation: String(values[2] || ""),
-          };
+        const original = item.original ?? values[0] ?? "";
+        const translation = item.translation ?? values[1] ?? "";
+        const explanation = item.explanation ?? values[2] ?? "";
+        const rawHardSpans = Array.isArray(item.hardSpans) ? item.hardSpans : [];
+
+        const hardSpans = [];
+        const originalStr = String(original || "");
+        for (const spanText of rawHardSpans) {
+          const text = String(spanText || "");
+          if (!text) continue;
+          const start = originalStr.indexOf(text);
+          if (start === -1) continue; // 原文に存在しない場合は破棄（AIが正確なoffsetを出せない対策）
+          hardSpans.push({ start, end: start + text.length });
         }
-        return { original: "", translation: "", explanation: "" };
+
+        return {
+          original: originalStr,
+          translation: String(translation || ""),
+          explanation: String(explanation || ""),
+          hardSpans,
+        };
       });
 
       // バリデーション: originalが空でない行が十分あるか
@@ -150,7 +169,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       console.log(`    ⚠️ 翻訳エラー (チャンク): ${error.message}`);
       // フォールバック：原文のみ返す
       return {
-        items: lines.map((line) => ({ original: line, translation: "", explanation: "" })),
+        items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [] })),
         costUsd: 0,
       };
     }
@@ -158,7 +177,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
   console.log(`    ⚠️ 翻訳エラー (チャンク): ${lastError?.message}`);
   return {
-    items: lines.map((line) => ({ original: line, translation: "", explanation: "" })),
+    items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [] })),
     costUsd: 0,
   };
 }

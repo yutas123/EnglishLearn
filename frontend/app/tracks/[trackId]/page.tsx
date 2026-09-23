@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList from "../../components/LyricsList";
 
 export const revalidate = 3600;
@@ -23,6 +24,17 @@ export default async function TrackPage({
   if (!track) {
     notFound();
   }
+
+  // 既知語ハイライト用のマッチャーは1リクエストにつき1回だけ構築する
+  const vocabEntries = await prisma.vocabEntry.findMany({
+    select: { term: true, isPhrase: true },
+  });
+  const matcher = buildMatcher(vocabEntries);
+  const linesWithSpans = track.translations.map((line) => ({
+    ...line,
+    knownSpans: findKnownSpans(line.original, matcher),
+    hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
+  }));
 
   const otherTracks = await prisma.track.findMany({
     where: { albumId: track.albumId },
@@ -67,7 +79,7 @@ export default async function TrackPage({
       {track.translations.length === 0 ? (
         <p className="text-sm text-zinc-500">歌詞データがありません。</p>
       ) : (
-        <LyricsList lines={track.translations} />
+        <LyricsList trackId={track.id} lines={linesWithSpans} />
       )}
 
       <nav className="flex items-center justify-between gap-2 border-t border-zinc-200 pt-4 text-sm font-medium">

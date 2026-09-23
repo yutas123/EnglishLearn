@@ -21,15 +21,18 @@ model Album {
 }
 
 model Track {
-  id           String        @id @default(cuid())
-  albumId      String
-  album        Album         @relation(fields: [albumId], references: [id])
-  trackNo      Int
-  title        String
-  analysis     String? // 楽曲解説（generateSongAnalysis の出力）
-  translations Translation[]
-  highlights   Highlight[]
-  createdAt    DateTime      @default(now())
+  id               String            @id @default(cuid())
+  albumId          String
+  album            Album             @relation(fields: [albumId], references: [id])
+  trackNo          Int
+  title            String
+  analysis         String? // 楽曲解説（generateSongAnalysis の出力）
+  translations     Translation[]
+  highlights       Highlight[]
+  vocabEntries     VocabEntry[]
+  vocabOccurrences VocabOccurrence[]
+  spanExplanations SpanExplanation[]
+  createdAt        DateTime          @default(now())
 }
 
 model Translation {
@@ -40,6 +43,57 @@ model Translation {
   original    String
   translation String
   explanation String? // LLMによる自動解説（倒置・イディオム等）
+  hardSpans   Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
+}
+
+model VocabEntry {
+  id              String    @id @default(cuid())
+  term            String // 単語=lemma / イディオム=軽く整形のみ、小文字化
+  surfaceForm     String // 選択時の原文表示用
+  isPhrase        Boolean   @default(false)
+  meaning         String
+  partOfSpeech    String?
+  cefr            String? // A1〜C2、null許容
+  sourceTrackId   String
+  sourceTrack     Track     @relation(fields: [sourceTrackId], references: [id])
+  sourceLineIndex Int
+  createdAt       DateTime  @default(now())
+
+  // SM-2簡易SRS
+  easeFactor     Float     @default(2.5)
+  intervalDays   Int       @default(0)
+  repetitions    Int       @default(0)
+  nextReviewAt   DateTime  @default(now())
+  lastReviewedAt DateTime?
+
+  occurrences VocabOccurrence[]
+
+  @@unique([term, isPhrase])
+  @@index([nextReviewAt])
+}
+
+model VocabOccurrence {
+  id           String     @id @default(cuid())
+  vocabEntryId String
+  vocabEntry   VocabEntry @relation(fields: [vocabEntryId], references: [id])
+  trackId      String
+  track        Track      @relation(fields: [trackId], references: [id])
+  lineIndex    Int
+  createdAt    DateTime   @default(now())
+
+  @@unique([vocabEntryId, trackId, lineIndex])
+}
+
+model SpanExplanation {
+  id           String   @id @default(cuid())
+  trackId      String
+  track        Track    @relation(fields: [trackId], references: [id])
+  lineIndex    Int
+  selectedText String
+  explanation  String
+  createdAt    DateTime @default(now())
+
+  @@unique([trackId, lineIndex, selectedText])
 }
 
 model Highlight {

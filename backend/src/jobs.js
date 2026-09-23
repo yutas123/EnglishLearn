@@ -136,6 +136,7 @@ export async function processAlbum(jobId, artistName, albumName) {
             original: t.original,
             translation: t.translation,
             explanation: t.explanation || null,
+            hardSpans: t.hardSpans?.length ? t.hardSpans : null,
           })),
         });
 
