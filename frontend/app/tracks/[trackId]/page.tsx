@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import HighlightableLyrics from "../../components/HighlightableLyrics";
+import LyricsList from "../../components/LyricsList";
 
 export const revalidate = 3600;
 
@@ -17,7 +17,6 @@ export default async function TrackPage({
     include: {
       album: true,
       translations: { orderBy: { lineIndex: "asc" } },
-      highlights: true,
     },
   });
 
@@ -40,30 +39,40 @@ export default async function TrackPage({
 
   return (
     <main className="flex flex-col gap-6">
-      <div className="flex items-center justify-between text-sm">
+      <nav className="flex items-center justify-between gap-2 text-sm font-medium">
+        {prevTrack ? (
+          <Link
+            href={`/tracks/${prevTrack.id}`}
+            className="truncate hover:underline"
+          >
+            ← 前の曲
+          </Link>
+        ) : (
+          <span />
+        )}
         <Link
           href={`/albums/${track.albumId}`}
-          className="text-zinc-500 hover:underline"
+          className="truncate text-zinc-500 hover:underline"
         >
-          ← {track.album.albumTitle}
+          {track.album.albumTitle}
         </Link>
-        <div className="flex gap-3">
-          {prevTrack && (
-            <Link href={`/tracks/${prevTrack.id}`} className="hover:underline">
-              ← 前の曲
-            </Link>
-          )}
-          {nextTrack && (
-            <Link href={`/tracks/${nextTrack.id}`} className="hover:underline">
-              次の曲 →
-            </Link>
-          )}
-        </div>
-      </div>
+        {nextTrack ? (
+          <Link
+            href={`/tracks/${nextTrack.id}`}
+            className="truncate hover:underline"
+          >
+            次の曲 →
+          </Link>
+        ) : (
+          <span />
+        )}
+      </nav>
 
       <header>
-        <h1 className="text-xl font-bold">{track.title}</h1>
-        <p className="text-sm text-zinc-500">{track.album.artistName}</p>
+        <h1 className="break-words text-xl font-bold">{track.title}</h1>
+        <p className="break-words text-sm text-zinc-500">
+          {track.album.artistName}
+        </p>
       </header>
 
       {track.analysis && (
@@ -71,7 +80,7 @@ export default async function TrackPage({
           <summary className="cursor-pointer select-none font-medium text-zinc-800">
             📖 楽曲解説
           </summary>
-          <p className="mt-2 whitespace-pre-wrap leading-relaxed">
+          <p className="mt-2 whitespace-pre-wrap break-words leading-relaxed">
             {track.analysis}
           </p>
         </details>
@@ -80,11 +89,7 @@ export default async function TrackPage({
       {track.translations.length === 0 ? (
         <p className="text-sm text-zinc-500">歌詞データがありません。</p>
       ) : (
-        <HighlightableLyrics
-          trackId={track.id}
-          lines={track.translations}
-          highlights={track.highlights}
-        />
+        <LyricsList lines={track.translations} />
       )}
     </main>
   );
