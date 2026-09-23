@@ -11,12 +11,26 @@ type JobResponse = {
   status: string;
   progressLog: string | null;
   errorMessage: string | null;
+  totalTracks: number | null;
+  completedTracks: number;
+  costUsd: number;
 };
+
+function formatCost(costUsd: number) {
+  if (!costUsd) return null;
+  const yen = costUsd * 150;
+  return `💰 現在までの費用: $${costUsd.toFixed(4)}（約${yen.toFixed(1)}円）`;
+}
 
 export default function AddCurrentTrackButton() {
   const router = useRouter();
   const [status, setStatus] = useState<JobStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    completed: number;
+    total: number | null;
+  } | null>(null);
+  const [costUsd, setCostUsd] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -32,6 +46,10 @@ export default function AddCurrentTrackButton() {
         const data: JobResponse = await res.json();
 
         setMessage(data.progressLog);
+        setCostUsd(data.costUsd ?? 0);
+        if (data.totalTracks) {
+          setProgress({ completed: data.completedTracks, total: data.totalTracks });
+        }
 
         if (data.status === "done") {
           setStatus("done");
@@ -59,6 +77,8 @@ export default function AddCurrentTrackButton() {
 
     setStatus("pending");
     setMessage("Spotifyの再生状況を確認中...");
+    setProgress(null);
+    setCostUsd(0);
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/jobs/from-spotify`, {
@@ -86,6 +106,7 @@ export default function AddCurrentTrackButton() {
   }
 
   const isBusy = status === "pending" || status === "running";
+  const costLine = formatCost(costUsd);
 
   return (
     <div className="flex flex-col gap-2">
@@ -96,15 +117,36 @@ export default function AddCurrentTrackButton() {
       >
         {isBusy ? "処理中..." : "🎧 今聴いてる曲を追加"}
       </button>
+
+      {isBusy && progress?.total && (
+        <div className="flex flex-col gap-1">
+          <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-zinc-200">
+            <div
+              className="h-full rounded-full bg-zinc-900 transition-all"
+              style={{
+                width: `${Math.round(
+                  (progress.completed / progress.total) * 100
+                )}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-zinc-500">
+            {progress.completed}/{progress.total} 曲完了
+          </p>
+        </div>
+      )}
+
       {message && (
         <p
-          className={`text-sm ${
+          className={`break-words text-sm ${
             status === "error" ? "text-red-600" : "text-zinc-500"
           }`}
         >
           {message}
         </p>
       )}
+
+      {costLine && <p className="text-xs text-zinc-400">{costLine}</p>}
     </div>
   );
 }

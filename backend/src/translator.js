@@ -12,10 +12,20 @@ function sleep(ms) {
 }
 
 /**
+ * OpenAIのusageからコスト（ドル）を計算（gpt-5-mini価格: 入力$0.25/1M, 出力$2.00/1M）
+ */
+function calcCostUsd(usage) {
+  if (!usage) return 0;
+  const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
+  const outputCost = (usage.completion_tokens / 1_000_000) * 2.0;
+  return inputCost + outputCost;
+}
+
+/**
  * OpenAI APIで歌詞チャンクを対訳（内部関数）
  * @param {OpenAI} openai - OpenAIクライアント
  * @param {string[]} lines - 歌詞の行配列（チャンク）
- * @returns {Array<{original: string, translation: string, explanation: string}>}
+ * @returns {{items: Array<{original: string, translation: string, explanation: string}>, costUsd: number}}
  */
 async function translateChunk(openai, lines) {
   const prompt = `【英語学習ノート作成 - 対訳と表現解説】
@@ -74,14 +84,12 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       const content = response.choices[0].message.content;
       const parsed = JSON.parse(content);
 
-      // コスト表示（gpt-5-mini の価格: 入力 $0.25/1M tokens, 出力 $2.00/1M tokens）
+      // コスト計算（gpt-5-mini の価格: 入力 $0.25/1M tokens, 出力 $2.00/1M tokens）
       const usage = response.usage;
+      const costUsd = calcCostUsd(usage);
       if (usage) {
-        const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
-        const outputCost = (usage.completion_tokens / 1_000_000) * 2.00;
-        const totalCost = inputCost + outputCost;
-        const totalCostYen = totalCost * 150; // 1ドル=150円換算
-        console.log(`    💰 コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
+        const totalCostYen = costUsd * 150; // 1ドル=150円換算
+        console.log(`    💰 コスト: $${costUsd.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`);
       }
 
       // レスポンスの形式に応じて配列を取り出す
@@ -125,7 +133,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         throw new Error(`翻訳結果が不十分 (${validCount}/${lines.length}行) - リトライします`);
       }
 
-      return normalized;
+      return { items: normalized, costUsd };
     } catch (error) {
       lastError = error;
       const isTimeout = error.code === 'ETIMEDOUT' || error.message.includes('timeout');
@@ -141,49 +149,52 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
       console.log(`    ⚠️ 翻訳エラー (チャンク): ${error.message}`);
       // フォールバック：原文のみ返す
-      return lines.map((line) => ({ original: line, translation: "", explanation: "" }));
+      return {
+        items: lines.map((line) => ({ original: line, translation: "", explanation: "" })),
+        costUsd: 0,
+      };
     }
   }
 
   console.log(`    ⚠️ 翻訳エラー (チャンク): ${lastError?.message}`);
-  return lines.map((line) => ({ original: line, translation: "", explanation: "" }));
+  return {
+    items: lines.map((line) => ({ original: line, translation: "", explanation: "" })),
+    costUsd: 0,
+  };
 }
 
 /**
  * OpenAI APIで歌詞を対訳（長い歌詞は自動分割）
  * @param {string[]} lines - 歌詞の行配列
  * @param {string} apiKey - OpenAI APIキー
- * @returns {Array<{original: string, translation: string, explanation: string}>} 対訳配列
+ * @returns {{translations: Array<{original: string, translation: string, explanation: string}>, costUsd: number}}
  */
 export async function translateLyrics(lines, apiKey) {
   const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
 
   // CHUNK_SIZE以下ならそのまま処理
   if (lines.length <= CHUNK_SIZE) {
-    return translateChunk(openai, lines);
+    const { items, costUsd } = await translateChunk(openai, lines);
+    return { translations: items, costUsd };
   }
 
-  // 分割して順次処理
+  // 分割して並列処理（チャンク数が多い場合は同時実行数を制限）
   const totalChunks = Math.ceil(lines.length / CHUNK_SIZE);
-  console.log(`    📦 ${lines.length}行を${totalChunks}分割で翻訳します`);
+  console.log(`    📦 ${lines.length}行を${totalChunks}分割で翻訳します（並列実行）`);
 
-  const allResults = [];
-
+  const chunks = [];
   for (let i = 0; i < lines.length; i += CHUNK_SIZE) {
-    const chunk = lines.slice(i, i + CHUNK_SIZE);
-    const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
-    console.log(`    📦 チャンク ${chunkIndex}/${totalChunks} (${chunk.length}行)`);
-
-    const results = await translateChunk(openai, chunk);
-    allResults.push(...results);
-
-    // チャンク間の待機（API制限対策）
-    if (i + CHUNK_SIZE < lines.length) {
-      await sleep(1000);
-    }
+    chunks.push(lines.slice(i, i + CHUNK_SIZE));
   }
 
-  return allResults;
+  const results = await Promise.all(
+    chunks.map((chunk) => translateChunk(openai, chunk))
+  );
+
+  const allResults = results.flatMap((r) => r.items);
+  const totalCostUsd = results.reduce((sum, r) => sum + r.costUsd, 0);
+
+  return { translations: allResults, costUsd: totalCostUsd };
 }
 
 /**
@@ -192,7 +203,7 @@ export async function translateLyrics(lines, apiKey) {
  * @param {string} songTitle - 曲名
  * @param {string} artistName - アーティスト名
  * @param {string} apiKey - OpenAI APIキー
- * @returns {string} 楽曲解説テキスト
+ * @returns {{analysis: string|null, costUsd: number}}
  */
 export async function generateSongAnalysis(lines, songTitle, artistName, apiKey) {
   const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
@@ -238,19 +249,17 @@ ${lyricsText}`;
 
       const content = response.choices[0].message.content;
 
-      // コスト表示
+      // コスト計算
       const usage = response.usage;
+      const costUsd = calcCostUsd(usage);
       if (usage) {
-        const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
-        const outputCost = (usage.completion_tokens / 1_000_000) * 2.0;
-        const totalCost = inputCost + outputCost;
-        const totalCostYen = totalCost * 150;
+        const totalCostYen = costUsd * 150;
         console.log(
-          `    💰 解説コスト: $${totalCost.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`
+          `    💰 解説コスト: $${costUsd.toFixed(4)} (約${totalCostYen.toFixed(2)}円) [入力:${usage.prompt_tokens} + 出力:${usage.completion_tokens} tokens]`
         );
       }
 
-      return content.trim();
+      return { analysis: content.trim(), costUsd };
     } catch (error) {
       lastError = error;
       const isTimeout =
@@ -268,10 +277,10 @@ ${lyricsText}`;
       }
 
       console.log(`    ⚠️ 解説生成エラー: ${error.message}`);
-      return null;
+      return { analysis: null, costUsd: 0 };
     }
   }
 
   console.log(`    ⚠️ 解説生成エラー: ${lastError?.message}`);
-  return null;
+  return { analysis: null, costUsd: 0 };
 }

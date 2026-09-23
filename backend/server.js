@@ -77,6 +77,9 @@ app.get("/api/jobs/:id", async (req, res) => {
     progressLog: job.progressLog,
     errorMessage: job.errorMessage,
     albumId: job.albumId,
+    totalTracks: job.totalTracks,
+    completedTracks: job.completedTracks,
+    costUsd: job.costUsd,
   });
 });
 

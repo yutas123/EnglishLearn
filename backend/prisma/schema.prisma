@@ -53,14 +53,17 @@ model Highlight {
 }
 
 model Job {
-  id           String   @id @default(cuid())
-  type         String // "album" 固定でよい
-  artistName   String
-  albumName    String
-  status       String // pending / running / done / error
-  progressLog  String? // 直近の進捗メッセージ（任意）
-  errorMessage String?
-  albumId      String? // 完了時にVercelのrevalidatePathへ渡すために保持
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  type            String // "album" 固定でよい
+  artistName      String
+  albumName       String
+  status          String // pending / running / done / error
+  progressLog     String? // 直近の進捗メッセージ（任意）
+  errorMessage    String?
+  albumId         String? // 完了時にVercelのrevalidatePathへ渡すために保持
+  totalTracks     Int? // アルバムの総曲数（判明時に設定）
+  completedTracks Int      @default(0) // 処理完了した曲数
+  costUsd         Float    @default(0) // OpenAI API利用の累計コスト（ドル）
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

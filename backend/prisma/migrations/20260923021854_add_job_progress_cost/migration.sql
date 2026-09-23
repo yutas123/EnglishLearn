@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Job" ADD COLUMN     "completedTracks" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "costUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "totalTracks" INTEGER;
