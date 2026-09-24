@@ -166,8 +166,11 @@ export default function LyricsList({
       setPopup({ mode: "menu" });
     }
 
-    // PC: mouseupで即座に反応
-    function handleMouseUp() {
+    // PC: mouseupで即座に反応。ただしポップアップ内のボタン操作（登録するなど）では、
+    // クリック時点で古いテキスト選択がまだ残っていることがあり、それを新規選択と誤認して
+    // ポップアップの状態を巻き戻してしまうことがあるため、ポップアップ内でのmouseupは無視する
+    function handleMouseUp(e: MouseEvent) {
+      if ((e.target as HTMLElement)?.closest("[data-vocab-popup]")) return;
       evaluateSelection();
     }
 
