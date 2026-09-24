@@ -128,6 +128,12 @@ export default function LyricsList({
   const [selection, setSelection] = useState<Selection | null>(null);
   const [popup, setPopup] = useState<PopupState>({ mode: "menu" });
   const [lastExplanation, setLastExplanation] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  function closePopup() {
+    setSelection(null);
+    setConfirmingDelete(false);
+  }
 
   useEffect(() => {
     function evaluateSelection() {
@@ -156,6 +162,7 @@ export default function LyricsList({
         rect,
       });
       setLastExplanation(null);
+      setConfirmingDelete(false);
       setPopup({ mode: "menu" });
     }
 
@@ -177,6 +184,7 @@ export default function LyricsList({
       if ((e.target as HTMLElement)?.closest("[data-vocab-popup]")) return;
       if ((e.target as HTMLElement)?.closest("mark")) return;
       setSelection(null);
+      setConfirmingDelete(false);
     }
 
     document.addEventListener("mouseup", handleMouseUp);
@@ -192,6 +200,7 @@ export default function LyricsList({
 
   function handleKnownClick(span: KnownSpan, el: HTMLElement) {
     window.getSelection()?.removeAllRanges();
+    setConfirmingDelete(false);
     setSelection({
       lineIndex: -1,
       original: "",
@@ -307,7 +316,6 @@ export default function LyricsList({
 
   async function handleDeleteEntry() {
     if (!selection?.existingVocabEntryId || !BACKEND_URL) return;
-    if (!window.confirm("この単語を単語帳から削除しますか？（すべての出現箇所から消えます）")) return;
 
     setPopup({ mode: "loading", action: "delete" });
     try {
@@ -319,7 +327,7 @@ export default function LyricsList({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "削除に失敗しました");
       }
-      setSelection(null);
+      closePopup();
       router.refresh();
     } catch (err) {
       setPopup({
@@ -378,7 +386,7 @@ export default function LyricsList({
                 📔 登録
               </button>
               <button
-                onClick={() => setSelection(null)}
+                onClick={closePopup}
                 className="ml-auto text-xs text-zinc-400 hover:text-zinc-600"
               >
                 ✕
@@ -406,7 +414,7 @@ export default function LyricsList({
                   📔 登録
                 </button>
                 <button
-                  onClick={() => setSelection(null)}
+                  onClick={closePopup}
                   className="text-xs text-zinc-400 hover:text-zinc-600"
                 >
                   閉じる
@@ -441,7 +449,7 @@ export default function LyricsList({
                   登録する
                 </button>
                 <button
-                  onClick={() => setSelection(null)}
+                  onClick={closePopup}
                   className="text-xs text-zinc-400 hover:text-zinc-600"
                 >
                   キャンセル
@@ -461,7 +469,7 @@ export default function LyricsList({
                 {popup.cefr && <span className="ml-1 text-zinc-400">({popup.cefr})</span>}
               </p>
               <button
-                onClick={() => setSelection(null)}
+                onClick={closePopup}
                 className="w-fit text-xs text-zinc-400 hover:text-zinc-600"
               >
                 閉じる
@@ -474,7 +482,7 @@ export default function LyricsList({
               <div className="flex items-start justify-between gap-2">
                 <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
                 <button
-                  onClick={() => setSelection(null)}
+                  onClick={closePopup}
                   aria-label="閉じる"
                   className="shrink-0 text-zinc-400 hover:text-zinc-600"
                 >
@@ -493,12 +501,35 @@ export default function LyricsList({
                   {popup.explanation}
                 </p>
               )}
-              <button
-                onClick={handleDeleteEntry}
-                className="w-fit text-xs text-red-500 hover:text-red-700"
-              >
-                削除
-              </button>
+
+              {confirmingDelete ? (
+                <div className="flex flex-col gap-1.5 rounded bg-red-50 p-2">
+                  <p className="text-xs text-red-700">
+                    単語帳から削除しますか？（すべての出現箇所から消えます）
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleDeleteEntry}
+                      className="w-fit rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+                    >
+                      削除する
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDelete(false)}
+                      className="text-xs text-zinc-500 hover:text-zinc-700"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="w-fit text-xs text-red-500 hover:text-red-700"
+                >
+                  削除
+                </button>
+              )}
             </>
           )}
 
@@ -506,7 +537,7 @@ export default function LyricsList({
             <>
               <p className="break-words text-xs text-red-600">{popup.message}</p>
               <button
-                onClick={() => setSelection(null)}
+                onClick={closePopup}
                 className="w-fit text-xs text-zinc-400 hover:text-zinc-600"
               >
                 閉じる
