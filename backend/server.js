@@ -86,12 +86,95 @@ app.get("/api/jobs/:id", async (req, res) => {
 });
 
 /**
- * POST /api/vocab/register — 選択した単語/熟語を単語帳に登録（同一語彙は再登録せず出現だけ追加）
+ * POST /api/vocab/preview — 登録前に内容（意味・品詞・CEFR）をプレビュー取得する。
+ * DBへの書き込みは行わない（既存語彙があればそれを返し、新規語彙はAIで下調べのみ行う）。
  * body: { term, isPhrase, trackId, lineIndex }
+ */
+app.post("/api/vocab/preview", async (req, res) => {
+  try {
+    const { term, isPhrase, trackId, lineIndex } = req.body;
+
+    if (!term || typeof term !== "string" || !trackId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "term / trackId / lineIndex は必須です" });
+    }
+
+    const line = await prisma.translation.findFirst({
+      where: { trackId, lineIndex },
+    });
+    if (!line) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    const rawTerm = term.trim();
+    const rawIsPhrase = Boolean(isPhrase);
+    const rawLowered = rawTerm.toLowerCase();
+
+    const existing = await prisma.vocabEntry.findUnique({
+      where: { term_isPhrase: { term: rawLowered, isPhrase: rawIsPhrase } },
+    });
+
+    if (existing) {
+      return res.json({
+        term: existing.term,
+        meaning: existing.meaning,
+        partOfSpeech: existing.partOfSpeech,
+        cefr: existing.cefr,
+        isExisting: true,
+        costUsd: 0,
+      });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const result = await lemmatizeAndDefine(
+      {
+        term: rawTerm,
+        isPhrase: rawIsPhrase,
+        lineOriginal: line.original,
+        lineTranslation: line.translation,
+      },
+      OPENAI_API_KEY
+    );
+
+    // AIが返した正規化後の語で再検索（別の表記から同じ語彙に辿り着く場合）
+    const normalizedExisting = await prisma.vocabEntry.findUnique({
+      where: { term_isPhrase: { term: result.term.toLowerCase(), isPhrase: rawIsPhrase } },
+    });
+
+    if (normalizedExisting) {
+      return res.json({
+        term: normalizedExisting.term,
+        meaning: normalizedExisting.meaning,
+        partOfSpeech: normalizedExisting.partOfSpeech,
+        cefr: normalizedExisting.cefr,
+        isExisting: true,
+        costUsd: result.costUsd,
+      });
+    }
+
+    res.json({
+      term: result.term,
+      meaning: result.meaning,
+      partOfSpeech: result.partOfSpeech,
+      cefr: result.cefr,
+      isExisting: false,
+      costUsd: result.costUsd,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/vocab/register — 単語帳への登録を確定する（同一語彙は再登録せず出現だけ追加）。
+ * meaning/partOfSpeech/cefrが渡された場合はプレビュー済みとみなしAI呼び出しをスキップする。
+ * body: { term, isPhrase, trackId, lineIndex, meaning?, partOfSpeech?, cefr?, explanation? }
  */
 app.post("/api/vocab/register", async (req, res) => {
   try {
-    const { term, isPhrase, trackId, lineIndex } = req.body;
+    const { term, isPhrase, trackId, lineIndex, meaning: previewedMeaning, partOfSpeech: previewedPos, cefr: previewedCefr, explanation } = req.body;
 
     if (!term || typeof term !== "string" || !trackId || typeof lineIndex !== "number") {
       return res.status(400).json({ error: "term / trackId / lineIndex は必須です" });
@@ -120,7 +203,35 @@ app.post("/api/vocab/register", async (req, res) => {
       meaning = vocabEntry.meaning;
       partOfSpeech = vocabEntry.partOfSpeech;
       cefr = vocabEntry.cefr;
+
+      // プレビュー時点でなかった解説が今回渡されたら追記する
+      if (explanation && !vocabEntry.explanation) {
+        vocabEntry = await prisma.vocabEntry.update({
+          where: { id: vocabEntry.id },
+          data: { explanation },
+        });
+      }
+    } else if (previewedMeaning) {
+      // プレビュー済み：AIを再度呼ばずそのまま作成する
+      vocabEntry = await prisma.vocabEntry.create({
+        data: {
+          term: rawLowered,
+          surfaceForm: rawTerm,
+          isPhrase: rawIsPhrase,
+          meaning: previewedMeaning,
+          partOfSpeech: previewedPos ?? null,
+          cefr: previewedCefr ?? null,
+          explanation: explanation ?? null,
+          sourceTrackId: trackId,
+          sourceLineIndex: lineIndex,
+        },
+      });
+      meaning = previewedMeaning;
+      partOfSpeech = previewedPos ?? null;
+      cefr = previewedCefr ?? null;
+      isNewEntry = true;
     } else {
+      // プレビューを経ていない直接呼び出し（フォールバック）
       if (!OPENAI_API_KEY) {
         return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
       }
@@ -141,7 +252,6 @@ app.post("/api/vocab/register", async (req, res) => {
 
       const normalizedTerm = result.term.toLowerCase();
 
-      // AIが返した正規化後の語で再検索（別の表記から同じ語彙に辿り着く場合の重複防止）
       vocabEntry = await prisma.vocabEntry.findUnique({
         where: { term_isPhrase: { term: normalizedTerm, isPhrase: rawIsPhrase } },
       });
@@ -155,6 +265,7 @@ app.post("/api/vocab/register", async (req, res) => {
             meaning,
             partOfSpeech,
             cefr,
+            explanation: explanation ?? null,
             sourceTrackId: trackId,
             sourceLineIndex: lineIndex,
           },
@@ -181,9 +292,31 @@ app.post("/api/vocab/register", async (req, res) => {
       meaning,
       partOfSpeech,
       cefr,
+      explanation: vocabEntry.explanation,
       isNewEntry,
       costUsd,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/vocab/:vocabEntryId — 単語帳からエントリを削除（全出現・ハイライトも消える）
+ */
+app.delete("/api/vocab/:vocabEntryId", async (req, res) => {
+  try {
+    const { vocabEntryId } = req.params;
+
+    const existing = await prisma.vocabEntry.findUnique({ where: { id: vocabEntryId } });
+    if (!existing) {
+      return res.status(404).json({ error: "対象の語彙が見つかりません" });
+    }
+
+    await prisma.vocabOccurrence.deleteMany({ where: { vocabEntryId } });
+    await prisma.vocabEntry.delete({ where: { id: vocabEntryId } });
+
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,9 +1,27 @@
 export type MatchSpan = { start: number; end: number };
 
-type VocabTermInput = { term: string; isPhrase: boolean };
+export type VocabTermInput = {
+  id: string;
+  term: string;
+  isPhrase: boolean;
+  meaning: string;
+  partOfSpeech: string | null;
+  cefr: string | null;
+  explanation: string | null;
+};
+
+export type KnownSpan = MatchSpan & {
+  vocabEntryId: string;
+  term: string;
+  meaning: string;
+  partOfSpeech: string | null;
+  cefr: string | null;
+  explanation: string | null;
+};
 
 export type VocabMatcher = {
-  wordStems: Set<string>;
+  wordStems: Map<string, VocabTermInput>;
+  phraseEntries: VocabTermInput[];
   phraseRegex: RegExp | null;
 };
 
@@ -26,43 +44,56 @@ function escapeRegExp(s: string): string {
 
 /**
  * 語彙リストから一度だけマッチャーを構築する。語彙が増えても検索は
- * 単語=Set参照、熟語=1本の正規表現なので、行数×語彙数のループにはならない。
+ * 単語=Map参照、熟語=1本の正規表現なので、行数×語彙数のループにはならない。
  */
 export function buildMatcher(entries: VocabTermInput[]): VocabMatcher {
-  const wordStems = new Set<string>();
-  const phraseTerms: string[] = [];
+  const wordStems = new Map<string, VocabTermInput>();
+  const phraseEntries: VocabTermInput[] = [];
 
   for (const entry of entries) {
     if (entry.isPhrase) {
-      phraseTerms.push(entry.term.toLowerCase());
+      phraseEntries.push(entry);
     } else {
-      wordStems.add(crudeStem(entry.term));
+      wordStems.set(crudeStem(entry.term), entry);
     }
   }
 
   // 長いフレーズを先にマッチさせる（短い部分文字列が先に食われるのを防ぐ）
-  phraseTerms.sort((a, b) => b.length - a.length);
+  phraseEntries.sort((a, b) => b.term.length - a.term.length);
 
   const phraseRegex =
-    phraseTerms.length > 0
-      ? new RegExp(phraseTerms.map(escapeRegExp).join("|"), "gi")
+    phraseEntries.length > 0
+      ? new RegExp(phraseEntries.map((e) => `(${escapeRegExp(e.term.toLowerCase())})`).join("|"), "gi")
       : null;
 
-  return { wordStems, phraseRegex };
+  return { wordStems, phraseEntries, phraseRegex };
 }
 
 /**
- * 1行のテキストに対して、既知語彙にマッチする範囲（文字オフセット）を返す。
+ * 1行のテキストに対して、既知語彙にマッチする範囲（文字オフセット）とその語彙情報を返す。
  * フレーズ一致を優先し、その範囲と重ならない単語だけ単語一致を追加する。
  */
-export function findKnownSpans(text: string, matcher: VocabMatcher): MatchSpan[] {
-  const spans: MatchSpan[] = [];
+export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[] {
+  const spans: KnownSpan[] = [];
 
   if (matcher.phraseRegex) {
     matcher.phraseRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = matcher.phraseRegex.exec(text)) !== null) {
-      spans.push({ start: match.index, end: match.index + match[0].length });
+      const groupIndex = match.slice(1).findIndex((g) => g !== undefined);
+      const entry = matcher.phraseEntries[groupIndex];
+      if (entry) {
+        spans.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          vocabEntryId: entry.id,
+          term: entry.term,
+          meaning: entry.meaning,
+          partOfSpeech: entry.partOfSpeech,
+          cefr: entry.cefr,
+          explanation: entry.explanation,
+        });
+      }
       if (match[0].length === 0) matcher.phraseRegex.lastIndex++;
     }
   }
@@ -75,8 +106,18 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): MatchSpan[]
       const end = start + match[0].length;
       const overlapsPhrase = spans.some((s) => start < s.end && end > s.start);
       if (overlapsPhrase) continue;
-      if (matcher.wordStems.has(crudeStem(match[0]))) {
-        spans.push({ start, end });
+      const entry = matcher.wordStems.get(crudeStem(match[0]));
+      if (entry) {
+        spans.push({
+          start,
+          end,
+          vocabEntryId: entry.id,
+          term: entry.term,
+          meaning: entry.meaning,
+          partOfSpeech: entry.partOfSpeech,
+          cefr: entry.cefr,
+          explanation: entry.explanation,
+        });
       }
     }
   }

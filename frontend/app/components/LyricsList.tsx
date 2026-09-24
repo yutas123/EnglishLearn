@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MatchSpan } from "@/lib/vocabMatcher";
+import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -12,32 +12,59 @@ type Line = {
   original: string;
   translation: string;
   explanation: string | null;
-  knownSpans: MatchSpan[];
+  knownSpans: KnownSpan[];
   hardSpans: MatchSpan[];
 };
 
-type TaggedSpan = MatchSpan & { kind: "known" | "hard" };
+type TaggedSpan =
+  | (MatchSpan & { kind: "hard" })
+  | (KnownSpan & { kind: "known" });
 
+// ドラッグ選択で新規に選んだ範囲か、既存の登録済みマーカーをクリックしたのかを区別する
 type Selection = {
   lineIndex: number;
   original: string;
   text: string;
   isPhrase: boolean;
   rect: DOMRect;
+  existingVocabEntryId?: string;
 };
 
 type PopupState =
   | { mode: "menu" }
-  | { mode: "loading"; action: "explain" | "register" }
+  | { mode: "loading"; action: "explain" | "preview" | "register" | "delete" }
   | { mode: "explanation"; text: string }
+  | {
+      mode: "confirm";
+      term: string;
+      meaning: string;
+      partOfSpeech: string | null;
+      cefr: string | null;
+      explanation: string | null;
+      isExisting: boolean;
+    }
   | { mode: "registered"; meaning: string; partOfSpeech: string | null; cefr: string | null }
+  | {
+      mode: "viewEntry";
+      vocabEntryId: string;
+      term: string;
+      meaning: string;
+      partOfSpeech: string | null;
+      cefr: string | null;
+      explanation: string | null;
+    }
   | { mode: "error"; message: string };
 
 /**
  * 既知語（known）と難所プリハイライト（hard）をマージし、原文を<mark>で分割表示する
  * （dangerouslySetInnerHTMLは使わない）。重なる場合はknownを優先する。
  */
-function renderWithHighlights(text: string, knownSpans: MatchSpan[], hardSpans: MatchSpan[]) {
+function renderWithHighlights(
+  text: string,
+  knownSpans: KnownSpan[],
+  hardSpans: MatchSpan[],
+  onKnownClick: (span: KnownSpan, el: HTMLElement) => void
+) {
   const tagged: TaggedSpan[] = [
     ...knownSpans.map((s) => ({ ...s, kind: "known" as const })),
     ...hardSpans.map((s) => ({ ...s, kind: "hard" as const })),
@@ -58,15 +85,29 @@ function renderWithHighlights(text: string, knownSpans: MatchSpan[], hardSpans: 
 
   spans.forEach((span, i) => {
     if (span.start > cursor) nodes.push(text.slice(cursor, span.start));
-    const className =
-      span.kind === "known"
-        ? "rounded bg-amber-100 px-0.5 text-inherit"
-        : "rounded bg-sky-100 px-0.5 text-inherit underline decoration-dotted decoration-sky-400";
-    nodes.push(
-      <mark key={i} className={className} title={span.kind === "hard" ? "難所（要チェック）" : undefined}>
-        {text.slice(span.start, span.end)}
-      </mark>
-    );
+
+    if (span.kind === "known") {
+      nodes.push(
+        <mark
+          key={i}
+          className="cursor-pointer rounded bg-emerald-100 px-0.5 text-inherit hover:bg-emerald-200"
+          title="登録済み（タップで詳細）"
+          onClick={(e) => onKnownClick(span, e.currentTarget)}
+        >
+          {text.slice(span.start, span.end)}
+        </mark>
+      );
+    } else {
+      nodes.push(
+        <mark
+          key={i}
+          className="rounded bg-sky-100 px-0.5 text-inherit underline decoration-dotted decoration-sky-400"
+          title="難所（要チェック）"
+        >
+          {text.slice(span.start, span.end)}
+        </mark>
+      );
+    }
     cursor = span.end;
   });
 
@@ -86,6 +127,7 @@ export default function LyricsList({
   const containerRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [popup, setPopup] = useState<PopupState>({ mode: "menu" });
+  const [lastExplanation, setLastExplanation] = useState<string | null>(null);
 
   useEffect(() => {
     function evaluateSelection() {
@@ -113,6 +155,7 @@ export default function LyricsList({
         isPhrase: text.split(/\s+/).length > 1,
         rect,
       });
+      setLastExplanation(null);
       setPopup({ mode: "menu" });
     }
 
@@ -132,6 +175,7 @@ export default function LyricsList({
     // ポインタダウン（マウス/タッチ/ペン共通）で新しい選択操作が始まったらポップアップを一旦閉じる
     function handlePointerDown(e: PointerEvent) {
       if ((e.target as HTMLElement)?.closest("[data-vocab-popup]")) return;
+      if ((e.target as HTMLElement)?.closest("mark")) return;
       setSelection(null);
     }
 
@@ -145,6 +189,27 @@ export default function LyricsList({
       if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, []);
+
+  function handleKnownClick(span: KnownSpan, el: HTMLElement) {
+    window.getSelection()?.removeAllRanges();
+    setSelection({
+      lineIndex: -1,
+      original: "",
+      text: span.term,
+      isPhrase: span.term.split(/\s+/).length > 1,
+      rect: el.getBoundingClientRect(),
+      existingVocabEntryId: span.vocabEntryId,
+    });
+    setPopup({
+      mode: "viewEntry",
+      vocabEntryId: span.vocabEntryId,
+      term: span.term,
+      meaning: span.meaning,
+      partOfSpeech: span.partOfSpeech,
+      cefr: span.cefr,
+      explanation: span.explanation,
+    });
+  }
 
   async function handleExplain() {
     if (!selection || !BACKEND_URL) return;
@@ -161,6 +226,7 @@ export default function LyricsList({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "解説の取得に失敗しました");
+      setLastExplanation(data.explanation);
       setPopup({ mode: "explanation", text: data.explanation });
     } catch (err) {
       setPopup({
@@ -170,8 +236,42 @@ export default function LyricsList({
     }
   }
 
-  async function handleRegister() {
+  async function handlePreviewRegister() {
     if (!selection || !BACKEND_URL) return;
+    setPopup({ mode: "loading", action: "preview" });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/vocab/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          term: selection.text,
+          isPhrase: selection.isPhrase,
+          trackId,
+          lineIndex: selection.lineIndex,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "登録内容の取得に失敗しました");
+      setPopup({
+        mode: "confirm",
+        term: data.term,
+        meaning: data.meaning,
+        partOfSpeech: data.partOfSpeech,
+        cefr: data.cefr,
+        explanation: lastExplanation,
+        isExisting: data.isExisting,
+      });
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
+  async function handleConfirmRegister() {
+    if (!selection || !BACKEND_URL || popup.mode !== "confirm") return;
+    const confirmed = popup;
     setPopup({ mode: "loading", action: "register" });
     try {
       const res = await fetch(`${BACKEND_URL}/api/vocab/register`, {
@@ -182,6 +282,10 @@ export default function LyricsList({
           isPhrase: selection.isPhrase,
           trackId,
           lineIndex: selection.lineIndex,
+          meaning: confirmed.meaning,
+          partOfSpeech: confirmed.partOfSpeech,
+          cefr: confirmed.cefr,
+          explanation: confirmed.explanation,
         }),
       });
       const data = await res.json();
@@ -201,6 +305,30 @@ export default function LyricsList({
     }
   }
 
+  async function handleDeleteEntry() {
+    if (!selection?.existingVocabEntryId || !BACKEND_URL) return;
+    if (!window.confirm("この単語を単語帳から削除しますか？（すべての出現箇所から消えます）")) return;
+
+    setPopup({ mode: "loading", action: "delete" });
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/vocab/${selection.existingVocabEntryId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "削除に失敗しました");
+      }
+      setSelection(null);
+      router.refresh();
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
   return (
     <div ref={containerRef} className="relative flex flex-col divide-y divide-zinc-100">
       {lines.map((line) => (
@@ -211,7 +339,7 @@ export default function LyricsList({
           className="flex flex-col gap-1 py-3"
         >
           <p className="break-words font-medium leading-relaxed">
-            {renderWithHighlights(line.original, line.knownSpans, line.hardSpans)}
+            {renderWithHighlights(line.original, line.knownSpans, line.hardSpans, handleKnownClick)}
           </p>
           {line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
@@ -244,7 +372,7 @@ export default function LyricsList({
                 詳しく!
               </button>
               <button
-                onClick={handleRegister}
+                onClick={handlePreviewRegister}
                 className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
               >
                 📔 登録
@@ -260,19 +388,65 @@ export default function LyricsList({
 
           {popup.mode === "loading" && (
             <p className="text-xs text-zinc-500">
-              {popup.action === "explain" ? "解説を生成中..." : "登録中..."}
+              {popup.action === "explain" && "解説を生成中..."}
+              {popup.action === "preview" && "登録内容を確認中..."}
+              {popup.action === "register" && "登録中..."}
+              {popup.action === "delete" && "削除中..."}
             </p>
           )}
 
           {popup.mode === "explanation" && (
             <>
               <p className="break-words leading-relaxed text-zinc-700">{popup.text}</p>
-              <button
-                onClick={() => setSelection(null)}
-                className="w-fit text-xs text-zinc-400 hover:text-zinc-600"
-              >
-                閉じる
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePreviewRegister}
+                  className="w-fit rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-50"
+                >
+                  📔 登録
+                </button>
+                <button
+                  onClick={() => setSelection(null)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  閉じる
+                </button>
+              </div>
+            </>
+          )}
+
+          {popup.mode === "confirm" && (
+            <>
+              <p className="text-xs font-medium text-zinc-500">
+                {popup.isExisting ? "この語彙は登録済みです" : "以下の内容で登録します"}
+              </p>
+              <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
+              <p className="break-words text-zinc-700">
+                {popup.partOfSpeech && (
+                  <span className="mr-1 text-zinc-400">[{popup.partOfSpeech}]</span>
+                )}
+                {popup.meaning}
+                {popup.cefr && <span className="ml-1 text-zinc-400">({popup.cefr})</span>}
+              </p>
+              {popup.explanation && (
+                <p className="break-words rounded bg-zinc-50 p-2 text-xs text-zinc-500">
+                  {popup.explanation}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleConfirmRegister}
+                  className="w-fit rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+                >
+                  登録する
+                </button>
+                <button
+                  onClick={() => setSelection(null)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  キャンセル
+                </button>
+              </div>
             </>
           )}
 
@@ -291,6 +465,39 @@ export default function LyricsList({
                 className="w-fit text-xs text-zinc-400 hover:text-zinc-600"
               >
                 閉じる
+              </button>
+            </>
+          )}
+
+          {popup.mode === "viewEntry" && (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
+                <button
+                  onClick={() => setSelection(null)}
+                  aria-label="閉じる"
+                  className="shrink-0 text-zinc-400 hover:text-zinc-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="break-words text-zinc-700">
+                {popup.partOfSpeech && (
+                  <span className="mr-1 text-zinc-400">[{popup.partOfSpeech}]</span>
+                )}
+                {popup.meaning}
+                {popup.cefr && <span className="ml-1 text-zinc-400">({popup.cefr})</span>}
+              </p>
+              {popup.explanation && (
+                <p className="break-words rounded bg-zinc-50 p-2 text-xs text-zinc-600">
+                  {popup.explanation}
+                </p>
+              )}
+              <button
+                onClick={handleDeleteEntry}
+                className="w-fit text-xs text-red-500 hover:text-red-700"
+              >
+                削除
               </button>
             </>
           )}

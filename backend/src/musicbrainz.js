@@ -39,6 +39,7 @@ export async function searchRelease(artist, album) {
 
   return {
     releaseId: release.id,
+    releaseGroupId: release["release-group"]?.id ?? null,
     albumTitle: release.title,
   };
 }

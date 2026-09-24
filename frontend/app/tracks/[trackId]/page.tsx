@@ -27,7 +27,15 @@ export default async function TrackPage({
 
   // 既知語ハイライト用のマッチャーは1リクエストにつき1回だけ構築する
   const vocabEntries = await prisma.vocabEntry.findMany({
-    select: { term: true, isPhrase: true },
+    select: {
+      id: true,
+      term: true,
+      isPhrase: true,
+      meaning: true,
+      partOfSpeech: true,
+      cefr: true,
+      explanation: true,
+    },
   });
   const matcher = buildMatcher(vocabEntries);
   const linesWithSpans = track.translations.map((line) => ({

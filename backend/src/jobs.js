@@ -1,25 +1,12 @@
 import { searchRelease, getTrackList } from "./musicbrainz.js";
 import { getLyrics, getAlbumUrl } from "./genius.js";
 import { translateLyrics, generateSongAnalysis } from "./translator.js";
+import { getCoverArtUrl } from "./coverArt.js";
 import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./config.js";
 import { prisma } from "./db.js";
 
 // 同時に処理する曲数（Genius/ScraperAPI/OpenAIへの同時アクセス数を抑えつつ高速化）
 const TRACK_CONCURRENCY = 3;
-
-/**
- * Cover Art Archiveからジャケット画像URLを取得（存在チェック付き）
- */
-async function getCoverArtUrl(releaseId) {
-  if (!releaseId) return null;
-  const url = `https://coverartarchive.org/release/${releaseId}/front-250`;
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    return res.ok ? url : null;
-  } catch {
-    return null;
-  }
-}
 
 async function updateJob(jobId, data) {
   await prisma.job.update({ where: { id: jobId }, data });
@@ -73,7 +60,7 @@ export async function processAlbum(jobId, artistName, albumName) {
     await log(`🔍 MusicBrainz 検索中: ${artistName} - ${albumName}`);
 
     // ① Release検索
-    const { releaseId, albumTitle } = await searchRelease(artistName, albumName);
+    const { releaseId, releaseGroupId, albumTitle } = await searchRelease(artistName, albumName);
     await log(`🎯 Release確定: ${albumTitle} (ID: ${releaseId})`);
 
     // 既に同一アルバムが登録済みなら再生成せずそのまま完了扱いにする
@@ -95,7 +82,7 @@ export async function processAlbum(jobId, artistName, albumName) {
     await updateJob(jobId, { totalTracks: tracks.length });
 
     // ③ ジャケット画像・Geniusリンク取得
-    const coverArtUrl = await getCoverArtUrl(releaseId);
+    const coverArtUrl = await getCoverArtUrl({ artistName, albumTitle, releaseId, releaseGroupId });
     await log(coverArtUrl ? `🖼️ ジャケット画像を取得` : `⚠️ ジャケット画像が見つかりません`);
 
     const geniusUrl = await getAlbumUrl(artistName, albumName, GENIUS_ACCESS_TOKEN);

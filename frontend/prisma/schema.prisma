@@ -54,6 +54,7 @@ model VocabEntry {
   meaning         String
   partOfSpeech    String?
   cefr            String? // A1〜C2、null許容
+  explanation     String? // 「詳しく!」で生成された解説文（登録時に一緒に保存された場合のみ）
   sourceTrackId   String
   sourceTrack     Track     @relation(fields: [sourceTrackId], references: [id])
   sourceLineIndex Int

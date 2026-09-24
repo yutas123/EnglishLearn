@@ -56,6 +56,46 @@ async function getAccessToken() {
 }
 
 /**
+ * アーティスト名+アルバム名でSpotifyを検索し、ジャケット画像URLを取得。
+ * 複数候補から「アーティスト名が完全一致し、アルバム名が最も近いもの」を選ぶことで、
+ * 同名の別作品（例: "xx" と "XX (20th Anniversary...)"）を誤って掴まないようにする。
+ * @returns {Promise<string|null>}
+ */
+export async function searchAlbumArt(artistName, albumName) {
+  try {
+    const accessToken = await getAccessToken();
+    const q = encodeURIComponent(`album:${albumName} artist:${artistName}`);
+    const res = await fetch(
+      `https://api.spotify.com/v1/search?q=${q}&type=album&limit=10`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const items = data.albums?.items ?? [];
+    if (items.length === 0) return null;
+
+    const normalize = (s) => s.toLowerCase().trim();
+    const targetArtist = normalize(artistName);
+    const targetAlbum = normalize(albumName);
+
+    const exact = items.find(
+      (it) =>
+        it.artists?.some((a) => normalize(a.name) === targetArtist) &&
+        normalize(it.name) === targetAlbum
+    );
+    const artistMatch = items.find((it) =>
+      it.artists?.some((a) => normalize(a.name) === targetArtist)
+    );
+    const chosen = exact ?? artistMatch ?? null;
+
+    return chosen?.images?.[0]?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 現在Spotifyで再生中のアルバム情報を取得
  * @returns {Promise<{artistName: string, albumName: string} | null>} 何も再生していない場合はnull
  */
