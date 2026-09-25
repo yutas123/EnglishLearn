@@ -40,10 +40,11 @@ model Translation {
   trackId     String
   track       Track   @relation(fields: [trackId], references: [id])
   lineIndex   Int // 行番号（表示順）
-  original    String
-  translation String
-  explanation String? // LLMによる自動解説（倒置・イディオム等）
-  hardSpans   Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
+  original     String
+  translation  String
+  explanation  String? // LLMによる自動解説（倒置・イディオム等）
+  hardSpans    Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
+  sectionLabel String? // Geniusのセクション見出し原文（例: "Verse 1: Paul McCartney & John Lennon"、新規処理分のみ）
 }
 
 model VocabEntry {

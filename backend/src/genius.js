@@ -162,7 +162,10 @@ async function scrapeLyrics(url) {
 }
 
 /**
- * 歌詞を行ごとの配列に分割（空行・セクション見出し・メタ情報を除去）
+ * 歌詞を行ごとの配列に分割（空行・メタ情報を除去）。
+ * セクション見出し [Verse 1: Paul McCartney & John Lennon] 等は歌詞本文からは除くが、
+ * 誰が歌っているか表示するために、直後から次の見出しまでの各行に紐づくラベルとして保持する。
+ * @returns {{ lines: string[], sectionByLine: (string|null)[] }}
  */
 function parseLyricsToLines(lyrics) {
   // メタ情報として除外するパターン
@@ -183,20 +186,27 @@ function parseLyricsToLines(lyrics) {
     /^report$/i,
   ];
 
-  return lyrics
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => {
-      // 空行を除去
-      if (!line) return false;
-      // セクション見出し [Verse 1] などを除去
-      if (line.startsWith("[") && line.endsWith("]")) return false;
-      // メタ情報パターンに一致する行を除去
-      for (const pattern of metaPatterns) {
-        if (pattern.test(line)) return false;
-      }
-      return true;
-    });
+  const lines = [];
+  const sectionByLine = [];
+  let currentSection = null;
+
+  for (const rawLine of lyrics.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // セクション見出し [Verse 1: ...] は本文から除き、以降の行のラベルとして記憶する
+    if (line.startsWith("[") && line.endsWith("]")) {
+      currentSection = line.slice(1, -1).trim() || null;
+      continue;
+    }
+
+    if (metaPatterns.some((pattern) => pattern.test(line))) continue;
+
+    lines.push(line);
+    sectionByLine.push(currentSection);
+  }
+
+  return { lines, sectionByLine };
 }
 
 /**
@@ -250,7 +260,7 @@ export async function getAlbumUrl(artist, albumName, accessToken) {
 
 /**
  * アーティスト名と曲名から歌詞を取得
- * @returns {string[]|null} 歌詞の行配列、見つからない場合はnull
+ * @returns {{ lines: string[], sectionByLine: (string|null)[] }|null} 見つからない場合はnull
  */
 export async function getLyrics(artist, title, accessToken) {
   try {
@@ -278,7 +288,7 @@ export async function getLyrics(artist, title, accessToken) {
 /**
  * Genius曲ページURLが既知の場合に、曲名検索を経由せず直接歌詞を取得する
  * （アルバム手動選択フローでは、アルバムのトラックリストから曲URLが既に判明しているため）
- * @returns {string[]|null} 歌詞の行配列、見つからない場合はnull
+ * @returns {{ lines: string[], sectionByLine: (string|null)[] }|null} 見つからない場合はnull
  */
 export async function getLyricsFromUrl(url) {
   try {

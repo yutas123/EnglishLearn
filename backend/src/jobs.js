@@ -42,13 +42,14 @@ async function runWithConcurrency(items, concurrency, worker) {
  * @returns {{ trackCostUsd: number, success: boolean }}
  */
 async function translateAndSaveTrack({ createdTrack, lyrics, artistName, trackTitle }) {
-  if (!lyrics || lyrics.length === 0) {
+  if (!lyrics || lyrics.lines.length === 0) {
     return { trackCostUsd: 0, success: false };
   }
 
+  const { lines, sectionByLine } = lyrics;
   let trackCostUsd = 0;
 
-  const { translations, costUsd: translateCost } = await translateLyrics(lyrics, OPENAI_API_KEY);
+  const { translations, costUsd: translateCost } = await translateLyrics(lines, OPENAI_API_KEY);
   trackCostUsd += translateCost;
 
   await prisma.translation.createMany({
@@ -59,11 +60,12 @@ async function translateAndSaveTrack({ createdTrack, lyrics, artistName, trackTi
       translation: t.translation,
       explanation: t.explanation || null,
       hardSpans: t.hardSpans?.length ? t.hardSpans : null,
+      sectionLabel: sectionByLine[i] || null,
     })),
   });
 
   const { analysis, costUsd: analysisCost } = await generateSongAnalysis(
-    lyrics,
+    lines,
     trackTitle,
     artistName,
     OPENAI_API_KEY
