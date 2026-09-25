@@ -13,31 +13,32 @@ export default async function TrackPage({
 }) {
   const { trackId } = await params;
 
-  const track = await prisma.track.findUnique({
-    where: { id: trackId },
-    include: {
-      album: true,
-      translations: { orderBy: { lineIndex: "asc" } },
-    },
-  });
+  // track本体と語彙一覧は互いに依存しないため並列に取得し、DB往復回数を減らす
+  const [track, vocabEntries] = await Promise.all([
+    prisma.track.findUnique({
+      where: { id: trackId },
+      include: {
+        album: true,
+        translations: { orderBy: { lineIndex: "asc" } },
+      },
+    }),
+    prisma.vocabEntry.findMany({
+      select: {
+        id: true,
+        term: true,
+        isPhrase: true,
+        meaning: true,
+        partOfSpeech: true,
+        cefr: true,
+        explanation: true,
+        sourceTrackId: true,
+      },
+    }),
+  ]);
 
   if (!track) {
     notFound();
   }
-
-  // 既知語ハイライト用のマッチャーは1リクエストにつき1回だけ構築する
-  const vocabEntries = await prisma.vocabEntry.findMany({
-    select: {
-      id: true,
-      term: true,
-      isPhrase: true,
-      meaning: true,
-      partOfSpeech: true,
-      cefr: true,
-      explanation: true,
-      sourceTrackId: true,
-    },
-  });
   const matcher = buildMatcher(vocabEntries);
   const linesWithSpans = track.translations.map((line) => ({
     ...line,
