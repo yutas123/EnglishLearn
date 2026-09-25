@@ -113,7 +113,7 @@ export default function AddCurrentTrackButton() {
       <button
         onClick={handleClick}
         disabled={isBusy}
-        className="w-fit rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-fit whitespace-nowrap rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isBusy ? "処理中..." : "🎧 今聴いてる曲を追加"}
       </button>

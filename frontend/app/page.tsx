@@ -16,7 +16,7 @@ export default async function HomePage() {
     <main className="flex flex-col gap-8">
       <header className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold">VerseVocab</h1>
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
           <AddCurrentTrackButton />
           <AddFromGeniusButton />
         </div>

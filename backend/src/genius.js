@@ -284,10 +284,18 @@ export async function getLyricsFromUrl(url) {
  * @returns {{ id: number, name: string, artistName: string, coverArtUrl: string|null, url: string }[]}
  */
 export async function searchAlbums(query) {
-  const url = `https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`;
+  const targetUrl = `https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`;
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  // Renderなどのデータセンターからの直接アクセスはCloudflareに403でブロックされるため、
+  // 歌詞スクレイピングと同様にScraperAPI経由でアクセスする（scrapeLyricsと同じ回避策）
+  const fetchUrl = SCRAPER_API_KEY
+    ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}`
+    : targetUrl;
+
+  const res = await fetch(fetchUrl, {
+    headers: SCRAPER_API_KEY
+      ? {}
+      : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
   });
 
   if (!res.ok) {

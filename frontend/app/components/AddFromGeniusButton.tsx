@@ -173,7 +173,7 @@ export default function AddFromGeniusButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="w-fit rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        className="w-fit whitespace-nowrap rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
       >
         📖 Geniusから追加
       </button>
@@ -205,7 +205,7 @@ export default function AddFromGeniusButton() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="アーティスト名・アルバム名で検索"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-base focus:border-zinc-500 focus:outline-none"
                 />
                 <ul className="flex flex-col divide-y divide-zinc-100">
                   {suggestions.map((album) => (
