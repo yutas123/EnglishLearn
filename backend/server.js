@@ -4,7 +4,8 @@ import { prisma } from "./src/db.js";
 import { getCurrentlyPlayingAlbum } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
-import { OPENAI_API_KEY } from "./src/config.js";
+import { searchAlbums, getAlbumDetail, getAlbumTracks } from "./src/genius.js";
+import { OPENAI_API_KEY, GENIUS_ACCESS_TOKEN } from "./src/config.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,6 +56,92 @@ app.post("/api/jobs/from-spotify", async (_req, res) => {
         artistName,
         albumName,
         status: "pending",
+      },
+    });
+
+    res.json({ jobId: job.id, artistName, albumName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/genius/search-albums?q=... — Genius検索サジェストAPI経由でアルバム候補を返す
+ * （フロントの入力補助用。DB書き込みなし・AI呼び出しなし）
+ */
+app.get("/api/genius/search-albums", async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q.length < 2) {
+      return res.json({ albums: [] });
+    }
+
+    const albums = await searchAlbums(q);
+    res.json({ albums });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/genius/albums/:id/preview — 登録前確認用にアルバム情報とトラックリストを返す
+ * （DB書き込みなし・AI呼び出しなし）
+ */
+app.get("/api/genius/albums/:id/preview", async (req, res) => {
+  try {
+    if (!GENIUS_ACCESS_TOKEN) {
+      return res.status(500).json({ error: "GENIUS_ACCESS_TOKEN が設定されていません" });
+    }
+
+    const albumId = req.params.id;
+    const [albumDetail, tracks] = await Promise.all([
+      getAlbumDetail(albumId, GENIUS_ACCESS_TOKEN),
+      getAlbumTracks(albumId, GENIUS_ACCESS_TOKEN),
+    ]);
+
+    if (!albumDetail) {
+      return res.status(404).json({ error: "アルバムが見つかりません" });
+    }
+
+    res.json({ ...albumDetail, tracks });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/from-genius — ユーザーが確認画面で選んだGeniusアルバムをジョブとして登録
+ * body: { geniusAlbumId, artistName, albumName }
+ */
+app.post("/api/jobs/from-genius", async (req, res) => {
+  try {
+    const { geniusAlbumId, artistName, albumName } = req.body;
+
+    if (!geniusAlbumId || !artistName || !albumName) {
+      return res.status(400).json({ error: "geniusAlbumId / artistName / albumName は必須です" });
+    }
+
+    // 同一アルバムのジョブが既に進行中なら、それを返す（重複投入防止）
+    const existingJob = await prisma.job.findFirst({
+      where: {
+        artistName,
+        albumName,
+        status: { in: ["pending", "running"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingJob) {
+      return res.json({ jobId: existingJob.id, artistName, albumName });
+    }
+
+    const job = await prisma.job.create({
+      data: {
+        type: "album",
+        artistName,
+        albumName,
+        status: "pending",
+        geniusAlbumId: String(geniusAlbumId),
       },
     });
 

@@ -116,6 +116,7 @@ model Job {
   progressLog     String? // 直近の進捗メッセージ（任意）
   errorMessage    String?
   albumId         String? // 完了時にVercelのrevalidatePathへ渡すために保持
+  geniusAlbumId   String? // Geniusから手動追加した場合のGeniusアルバムID（MusicBrainzを経由しない）
   totalTracks     Int? // アルバムの総曲数（判明時に設定）
   completedTracks Int      @default(0) // 処理完了した曲数
   costUsd         Float    @default(0) // OpenAI API利用の累計コスト（ドル）

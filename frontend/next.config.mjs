@@ -4,6 +4,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "coverartarchive.org" },
       { protocol: "https", hostname: "i.scdn.co" },
+      { protocol: "https", hostname: "images.genius.com" },
     ],
   },
 };

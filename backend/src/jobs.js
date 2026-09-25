@@ -1,5 +1,5 @@
 import { searchRelease, getTrackList } from "./musicbrainz.js";
-import { getLyrics, getAlbumUrl } from "./genius.js";
+import { getLyrics, getAlbumUrl, getLyricsFromUrl, getAlbumDetail, getAlbumTracks } from "./genius.js";
 import { translateLyrics, generateSongAnalysis } from "./translator.js";
 import { getCoverArtUrl } from "./coverArt.js";
 import { GENIUS_ACCESS_TOKEN, OPENAI_API_KEY } from "./config.js";
@@ -33,6 +33,83 @@ async function runWithConcurrency(items, concurrency, worker) {
     () => runNext()
   );
   await Promise.all(runners);
+}
+
+/**
+ * 1曲分の歌詞取得後の処理（対訳生成・楽曲解説生成・DB保存）を行う共通ヘルパー。
+ * processAlbum（MusicBrainz経由）とprocessAlbumFromGenius（Genius手動選択経由）の
+ * 両方から使う。歌詞の取得方法だけが異なり、それ以降の処理は共通のため。
+ * @returns {{ trackCostUsd: number, success: boolean }}
+ */
+async function translateAndSaveTrack({ createdTrack, lyrics, artistName, trackTitle }) {
+  if (!lyrics || lyrics.length === 0) {
+    return { trackCostUsd: 0, success: false };
+  }
+
+  let trackCostUsd = 0;
+
+  const { translations, costUsd: translateCost } = await translateLyrics(lyrics, OPENAI_API_KEY);
+  trackCostUsd += translateCost;
+
+  await prisma.translation.createMany({
+    data: translations.map((t, i) => ({
+      trackId: createdTrack.id,
+      lineIndex: i,
+      original: t.original,
+      translation: t.translation,
+      explanation: t.explanation || null,
+      hardSpans: t.hardSpans?.length ? t.hardSpans : null,
+    })),
+  });
+
+  const { analysis, costUsd: analysisCost } = await generateSongAnalysis(
+    lyrics,
+    trackTitle,
+    artistName,
+    OPENAI_API_KEY
+  );
+  trackCostUsd += analysisCost;
+
+  if (analysis) {
+    await prisma.track.update({ where: { id: createdTrack.id }, data: { analysis } });
+  }
+
+  return { trackCostUsd, success: true };
+}
+
+/**
+ * トラック一覧を並列処理し、各曲の歌詞取得（呼び出し元から渡された方法で）→対訳・解説生成→
+ * DB保存→進捗更新までを行う共通ヘルパー。歌詞の取得方法（曲名検索 or URL直接指定）だけが
+ * processAlbumとprocessAlbumFromGeniusで異なる。
+ */
+async function processTracks({ jobId, albumId, artistName, tracks, getLyricsForTrack }) {
+  let completedCount = 0;
+  let totalCostUsd = 0;
+
+  await runWithConcurrency(tracks, TRACK_CONCURRENCY, async (track) => {
+    const createdTrack = await prisma.track.create({
+      data: { albumId, trackNo: track.trackNo, title: track.title },
+    });
+
+    const lyrics = await getLyricsForTrack(track);
+    const { trackCostUsd, success } = await translateAndSaveTrack({
+      createdTrack,
+      lyrics,
+      artistName,
+      trackTitle: track.title,
+    });
+    const statusIcon = success ? "✅" : "⚠️";
+    const statusNote = success ? "完了" : "歌詞なし";
+
+    completedCount += 1;
+    totalCostUsd += trackCostUsd;
+
+    await updateJob(jobId, {
+      completedTracks: completedCount,
+      costUsd: totalCostUsd,
+      progressLog: `${statusIcon} [${completedCount}/${tracks.length}] ${track.trackNo}. ${track.title}（${statusNote}）`,
+    });
+  });
 }
 
 /**
@@ -96,64 +173,101 @@ export async function processAlbum(jobId, artistName, albumName) {
     await log(`📀 アルバム作成完了: ${albumTitle}`);
 
     // ⑤ 各トラックを並列処理（同時TRACK_CONCURRENCY曲まで）+ 歌詞と対訳
-    let completedCount = 0;
-    let totalCostUsd = 0;
+    await processTracks({
+      jobId,
+      albumId: album.id,
+      artistName,
+      tracks,
+      getLyricsForTrack: (track) => getLyrics(artistName, track.title, GENIUS_ACCESS_TOKEN),
+    });
 
-    await runWithConcurrency(tracks, TRACK_CONCURRENCY, async (track) => {
-      const createdTrack = await prisma.track.create({
-        data: { albumId: album.id, trackNo: track.trackNo, title: track.title },
-      });
+    await updateJob(jobId, {
+      status: "done",
+      progressLog: "🎉 完了！アルバムと全曲（歌詞付き）が登録されました",
+    });
+  } catch (error) {
+    await updateJob(jobId, {
+      status: "error",
+      errorMessage: error.message,
+      progressLog: `❌ エラー発生: ${error.message}`,
+    }).catch(() => {});
+    throw error;
+  }
+}
 
-      const lyrics = await getLyrics(artistName, track.title, GENIUS_ACCESS_TOKEN);
-      let trackCostUsd = 0;
-      let statusIcon = "⚠️";
-      let statusNote = "歌詞なし";
+/**
+ * アルバム処理（Job単位、Genius手動選択経由）。
+ * MusicBrainzを経由せず、ユーザーが確認画面で選んだGeniusアルバムのトラックリスト・曲URLを
+ * そのまま使う。UK/US版など、MusicBrainzの「最古のオフィシャル版」選定では意図しない版に
+ * なってしまうケースを、ユーザー自身の選択で回避するための経路。
+ * @param {string} jobId - JobテーブルのID
+ * @param {string} geniusAlbumId - GeniusのアルバムID
+ */
+export async function processAlbumFromGenius(jobId, geniusAlbumId) {
+  const log = async (msg) => {
+    console.log(msg);
+    await updateJob(jobId, { progressLog: msg }).catch(() => {});
+  };
 
-      if (lyrics && lyrics.length > 0) {
-        const { translations, costUsd: translateCost } = await translateLyrics(
-          lyrics,
-          OPENAI_API_KEY
-        );
-        trackCostUsd += translateCost;
+  try {
+    await updateJob(jobId, { status: "running" });
 
-        await prisma.translation.createMany({
-          data: translations.map((t, i) => ({
-            trackId: createdTrack.id,
-            lineIndex: i,
-            original: t.original,
-            translation: t.translation,
-            explanation: t.explanation || null,
-            hardSpans: t.hardSpans?.length ? t.hardSpans : null,
-          })),
-        });
+    if (!GENIUS_ACCESS_TOKEN) {
+      throw new Error("GENIUS_ACCESS_TOKEN が設定されていません");
+    }
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY が設定されていません");
+    }
 
-        const { analysis, costUsd: analysisCost } = await generateSongAnalysis(
-          lyrics,
-          track.title,
-          artistName,
-          OPENAI_API_KEY
-        );
-        trackCostUsd += analysisCost;
+    await log(`🔍 Geniusアルバム情報取得中... (ID: ${geniusAlbumId})`);
 
-        if (analysis) {
-          await prisma.track.update({
-            where: { id: createdTrack.id },
-            data: { analysis },
-          });
-        }
+    const [albumDetail, tracks] = await Promise.all([
+      getAlbumDetail(geniusAlbumId, GENIUS_ACCESS_TOKEN),
+      getAlbumTracks(geniusAlbumId, GENIUS_ACCESS_TOKEN),
+    ]);
 
-        statusIcon = "✅";
-        statusNote = "完了";
-      }
+    if (!albumDetail) {
+      throw new Error("Geniusアルバム情報が取得できませんでした");
+    }
+    if (!tracks || tracks.length === 0) {
+      throw new Error("Geniusのトラックリストが空です");
+    }
 
-      completedCount += 1;
-      totalCostUsd += trackCostUsd;
+    const { artistName, name: albumTitle, coverArtUrl: geniusCoverArtUrl, url: geniusUrl } = albumDetail;
+    await log(`🎯 アルバム確定: ${artistName} - ${albumTitle}`);
 
+    // 既に同一アルバムが登録済みなら再生成せずそのまま完了扱いにする
+    const existing = await prisma.album.findUnique({
+      where: { artistName_albumTitle: { artistName, albumTitle } },
+    });
+    if (existing) {
       await updateJob(jobId, {
-        completedTracks: completedCount,
-        costUsd: totalCostUsd,
-        progressLog: `${statusIcon} [${completedCount}/${tracks.length}] ${track.trackNo}. ${track.title}（${statusNote}）`,
+        status: "done",
+        albumId: existing.id,
+        progressLog: `✅ 既に登録済みのアルバムです: ${albumTitle}`,
       });
+      return;
+    }
+
+    await log(`🎧 ${tracks.length} 曲取得`);
+    await updateJob(jobId, { totalTracks: tracks.length });
+
+    // ジャケット画像はユーザーが確認画面で見た版と一致させるため、Genius提供のものを優先する
+    const coverArtUrl = geniusCoverArtUrl ?? (await getCoverArtUrl({ artistName, albumTitle }));
+    await log(coverArtUrl ? `🖼️ ジャケット画像を取得` : `⚠️ ジャケット画像が見つかりません`);
+
+    const album = await prisma.album.create({
+      data: { artistName, albumTitle, releaseId: null, coverArtUrl, geniusUrl },
+    });
+    await updateJob(jobId, { albumId: album.id });
+    await log(`📀 アルバム作成完了: ${albumTitle}`);
+
+    await processTracks({
+      jobId,
+      albumId: album.id,
+      artistName,
+      tracks,
+      getLyricsForTrack: (track) => getLyricsFromUrl(track.url),
     });
 
     await updateJob(jobId, {

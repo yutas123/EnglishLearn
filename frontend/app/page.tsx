@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
 import AddCurrentTrackButton from "./components/AddCurrentTrackButton";
+import AddFromGeniusButton from "./components/AddFromGeniusButton";
 
 export const revalidate = 3600;
 
@@ -15,7 +16,10 @@ export default async function HomePage() {
     <main className="flex flex-col gap-8">
       <header className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold">VerseVocab</h1>
-        <AddCurrentTrackButton />
+        <div className="flex flex-wrap items-start gap-2">
+          <AddCurrentTrackButton />
+          <AddFromGeniusButton />
+        </div>
       </header>
 
       {albums.length === 0 ? (

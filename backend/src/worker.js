@@ -1,5 +1,5 @@
 import { prisma } from "./db.js";
-import { processAlbum } from "./jobs.js";
+import { processAlbum, processAlbumFromGenius } from "./jobs.js";
 import { VERCEL_REVALIDATE_URL, VERCEL_REVALIDATE_SECRET } from "./config.js";
 
 const POLL_INTERVAL_MS = 5000;
@@ -38,7 +38,11 @@ async function tick() {
 
   isProcessing = true;
   try {
-    await processAlbum(job.id, job.artistName, job.albumName);
+    if (job.geniusAlbumId) {
+      await processAlbumFromGenius(job.id, job.geniusAlbumId);
+    } else {
+      await processAlbum(job.id, job.artistName, job.albumName);
+    }
 
     const updated = await prisma.job.findUnique({ where: { id: job.id } });
     if (updated?.status === "done" && updated.albumId) {

@@ -256,3 +256,105 @@ export async function getLyrics(artist, title, accessToken) {
     return null;
   }
 }
+
+/**
+ * Genius曲ページURLが既知の場合に、曲名検索を経由せず直接歌詞を取得する
+ * （アルバム手動選択フローでは、アルバムのトラックリストから曲URLが既に判明しているため）
+ * @returns {string[]|null} 歌詞の行配列、見つからない場合はnull
+ */
+export async function getLyricsFromUrl(url) {
+  try {
+    const lyrics = await scrapeLyrics(url);
+
+    if (!lyrics) {
+      console.log(`    ⚠️ 歌詞を取得できませんでした: ${url}`);
+      return null;
+    }
+
+    return parseLyricsToLines(lyrics);
+  } catch (error) {
+    console.log(`    ⚠️ 歌詞取得エラー: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Genius公式サイトの検索サジェストAPI（未公開だがgenius.com自体が使用している）でアルバムを検索する。
+ * アーティスト名や版違い（Super Deluxe Edition等）を含めて曲単位ではなくアルバム単位で候補を返す。
+ * @returns {{ id: number, name: string, artistName: string, coverArtUrl: string|null, url: string }[]}
+ */
+export async function searchAlbums(query) {
+  const url = `https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Geniusアルバム検索に失敗しました (status ${res.status})`);
+  }
+
+  const data = await res.json();
+  const albumSection = (data?.response?.sections ?? []).find((s) => s.type === "album");
+  const hits = albumSection?.hits ?? [];
+
+  return hits.map((hit) => ({
+    id: hit.result.id,
+    name: hit.result.name,
+    artistName: hit.result.artist?.name ?? "",
+    coverArtUrl: hit.result.cover_art_url ?? null,
+    url: hit.result.url,
+  }));
+}
+
+/**
+ * GeniusアルバムIDからアルバム基本情報を取得する
+ * @returns {{ id: number, name: string, artistName: string, coverArtUrl: string|null, url: string }|null}
+ */
+export async function getAlbumDetail(albumId, accessToken) {
+  const res = await fetch(`${GENIUS_API_URL}/albums/${albumId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Geniusアルバム情報の取得に失敗しました (status ${res.status})`);
+  }
+
+  const data = await res.json();
+  const album = data?.response?.album;
+  if (!album) return null;
+
+  return {
+    id: album.id,
+    name: album.name,
+    artistName: album.artist?.name ?? album.primary_artist_names ?? "",
+    coverArtUrl: album.cover_art_url ?? null,
+    url: album.url,
+  };
+}
+
+/**
+ * GeniusアルバムIDからトラックリスト（曲名・曲ページURL）を取得する。
+ * 曲ページURLが判明しているため、後続の歌詞取得ではgetLyricsFromUrlを使い曲名検索を省略できる。
+ * @returns {{ trackNo: number, title: string, url: string }[]}
+ */
+export async function getAlbumTracks(albumId, accessToken) {
+  const res = await fetch(`${GENIUS_API_URL}/albums/${albumId}/tracks?per_page=50`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Geniusトラックリストの取得に失敗しました (status ${res.status})`);
+  }
+
+  const data = await res.json();
+  const rawTracks = data?.response?.tracks ?? [];
+
+  return rawTracks
+    .filter((t) => t.song)
+    .map((t, i) => ({
+      trackNo: t.number ?? i + 1,
+      title: t.song.title,
+      url: t.song.url,
+    }));
+}
