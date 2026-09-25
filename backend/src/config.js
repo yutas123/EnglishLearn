@@ -14,6 +14,9 @@ export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // ScraperAPI
 export const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
 
+// ZenRows（ScraperAPIのクレジット枯渇時の代替。genius.com直アクセスのCloudflare回避用）
+export const ZENROWS_API_KEY = process.env.ZENROWS_API_KEY;
+
 // Spotify API
 export const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 export const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;

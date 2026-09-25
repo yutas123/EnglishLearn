@@ -1,11 +1,35 @@
 import * as cheerio from "cheerio";
-import { SCRAPER_API_KEY } from "./config.js";
+import { SCRAPER_API_KEY, ZENROWS_API_KEY } from "./config.js";
 
 const GENIUS_API_URL = "https://api.genius.com";
 const MAX_RETRIES = 3;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Renderなどデータセンターからの直接アクセスはCloudflareに403でブロックされるため、
+ * genius.com（未公開の検索API・歌詞ページ）へのアクセスはプロキシ経由にする。
+ * ZenRowsを優先し（無料枠が大きい）、無ければScraperAPI、どちらも無ければ直接アクセスする。
+ */
+function buildGeniusWebFetch(targetUrl) {
+  if (ZENROWS_API_KEY) {
+    return {
+      url: `https://api.zenrows.com/v1/?apikey=${ZENROWS_API_KEY}&url=${encodeURIComponent(targetUrl)}`,
+      headers: {},
+    };
+  }
+  if (SCRAPER_API_KEY) {
+    return {
+      url: `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}`,
+      headers: {},
+    };
+  }
+  return {
+    url: targetUrl,
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  };
 }
 
 /**
@@ -76,17 +100,11 @@ async function searchSong(artist, title, accessToken) {
  * ScraperAPI/Genius側の一時的な取得失敗は数回リトライする
  */
 async function scrapeLyrics(url) {
-  const fetchUrl = SCRAPER_API_KEY
-    ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}`
-    : url;
+  const { url: fetchUrl, headers } = buildGeniusWebFetch(url);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch(fetchUrl, {
-        headers: SCRAPER_API_KEY
-          ? {}
-          : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-      });
+      const res = await fetch(fetchUrl, { headers });
 
       if (!res.ok) {
         throw new Error(`歌詞ページの取得に失敗しました (status ${res.status})`);
@@ -285,18 +303,9 @@ export async function getLyricsFromUrl(url) {
  */
 export async function searchAlbums(query) {
   const targetUrl = `https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`;
+  const { url: fetchUrl, headers } = buildGeniusWebFetch(targetUrl);
 
-  // Renderなどのデータセンターからの直接アクセスはCloudflareに403でブロックされるため、
-  // 歌詞スクレイピングと同様にScraperAPI経由でアクセスする（scrapeLyricsと同じ回避策）
-  const fetchUrl = SCRAPER_API_KEY
-    ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}`
-    : targetUrl;
-
-  const res = await fetch(fetchUrl, {
-    headers: SCRAPER_API_KEY
-      ? {}
-      : { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-  });
+  const res = await fetch(fetchUrl, { headers });
 
   if (!res.ok) {
     throw new Error(`Geniusアルバム検索に失敗しました (status ${res.status})`);
