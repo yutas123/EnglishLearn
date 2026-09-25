@@ -8,6 +8,7 @@ export type VocabTermInput = {
   partOfSpeech: string | null;
   cefr: string | null;
   explanation: string | null;
+  sourceTrackId: string;
 };
 
 export type KnownSpan = MatchSpan & {
@@ -17,6 +18,7 @@ export type KnownSpan = MatchSpan & {
   partOfSpeech: string | null;
   cefr: string | null;
   explanation: string | null;
+  sourceTrackId: string;
 };
 
 export type VocabMatcher = {
@@ -92,6 +94,7 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           partOfSpeech: entry.partOfSpeech,
           cefr: entry.cefr,
           explanation: entry.explanation,
+          sourceTrackId: entry.sourceTrackId,
         });
       }
       if (match[0].length === 0) matcher.phraseRegex.lastIndex++;
@@ -117,6 +120,7 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           partOfSpeech: entry.partOfSpeech,
           cefr: entry.cefr,
           explanation: entry.explanation,
+          sourceTrackId: entry.sourceTrackId,
         });
       }
     }

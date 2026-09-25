@@ -5,7 +5,9 @@ const MAX_RETRIES = 3;
 const TIMEOUT_MS = 60000; // 60秒（単発呼び出しなのでチャンク処理より短く）
 
 /**
- * 選択テキストを登録用に整形しつつ、意味・品詞・CEFRをAIで取得
+ * 選択テキストを登録用に整形しつつ、意味・品詞・CEFRをAIで取得。
+ * meaningは他の曲でも使い回されるため、この行限定の意訳ではなく一般的な意味を返す
+ * （文脈固有のニュアンスは/api/vocab/explainで曲・行単位に別途取得する）。
  * @param {{ term: string, isPhrase: boolean, lineOriginal: string, lineTranslation: string }} input
  * @param {string} apiKey
  * @returns {{ term: string, meaning: string, partOfSpeech: string, cefr: string|null, costUsd: number }}
@@ -31,10 +33,14 @@ export async function lemmatizeAndDefine(
 
 ${normalizationInstruction}
 
+この表現はこの曲以外の歌詞でも同じ語として単語帳に登録され、他の曲では別の文脈で使われます。
+"meaning"には、この行だけの意訳ではなく、辞書に載っているような、どの文脈でも通用する一般的な意味を書いてください
+（例:「every time」なら「〜するたびに（いつも）」のように、文脈に依存しない基本義）。
+
 以下のJSON形式で出力してください（必ずこの形式を守ってください）：
 {
   "term": "登録用の表記",
-  "meaning": "この文脈における日本語の意味（簡潔に）",
+  "meaning": "一般的な(辞書的な)日本語の意味（簡潔に、文脈依存の意訳は避ける）",
   "partOfSpeech": "品詞（熟語・イディオムの場合は「イディオム」）",
   "cefr": "A1〜C2のいずれか（判断が難しい場合はnull）"
 }`;

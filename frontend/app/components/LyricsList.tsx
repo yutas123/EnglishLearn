@@ -52,6 +52,7 @@ type PopupState =
       partOfSpeech: string | null;
       cefr: string | null;
       explanation: string | null;
+      isOriginTrack: boolean;
     }
   | { mode: "error"; message: string };
 
@@ -63,7 +64,7 @@ function renderWithHighlights(
   text: string,
   knownSpans: KnownSpan[],
   hardSpans: MatchSpan[],
-  onKnownClick: (span: KnownSpan, el: HTMLElement) => void
+  onKnownClick: (span: KnownSpan, el: HTMLElement, matchedText: string) => void
 ) {
   const tagged: TaggedSpan[] = [
     ...knownSpans.map((s) => ({ ...s, kind: "known" as const })),
@@ -92,7 +93,9 @@ function renderWithHighlights(
           key={i}
           className="cursor-pointer rounded bg-emerald-100 px-0.5 text-inherit hover:bg-emerald-200"
           title="登録済み（タップで詳細）"
-          onClick={(e) => onKnownClick(span, e.currentTarget)}
+          onClick={(e) =>
+            onKnownClick(span, e.currentTarget, text.slice(span.start, span.end))
+          }
         >
           {text.slice(span.start, span.end)}
         </mark>
@@ -129,10 +132,15 @@ export default function LyricsList({
   const [popup, setPopup] = useState<PopupState>({ mode: "menu" });
   const [lastExplanation, setLastExplanation] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [contextNote, setContextNote] = useState<{ loading: boolean; text: string | null }>({
+    loading: false,
+    text: null,
+  });
 
   function closePopup() {
     setSelection(null);
     setConfirmingDelete(false);
+    setContextNote({ loading: false, text: null });
   }
 
   useEffect(() => {
@@ -163,6 +171,7 @@ export default function LyricsList({
       });
       setLastExplanation(null);
       setConfirmingDelete(false);
+      setContextNote({ loading: false, text: null });
       setPopup({ mode: "menu" });
     }
 
@@ -201,14 +210,20 @@ export default function LyricsList({
     };
   }, []);
 
-  function handleKnownClick(span: KnownSpan, el: HTMLElement) {
+  function handleKnownClick(
+    span: KnownSpan,
+    el: HTMLElement,
+    matchedText: string,
+    lineIndex: number
+  ) {
     window.getSelection()?.removeAllRanges();
     setConfirmingDelete(false);
+    setContextNote({ loading: false, text: null });
     setSelection({
-      lineIndex: -1,
-      original: "",
-      text: span.term,
-      isPhrase: span.term.split(/\s+/).length > 1,
+      lineIndex,
+      original: matchedText,
+      text: matchedText,
+      isPhrase: matchedText.split(/\s+/).length > 1,
       rect: el.getBoundingClientRect(),
       existingVocabEntryId: span.vocabEntryId,
     });
@@ -220,7 +235,32 @@ export default function LyricsList({
       partOfSpeech: span.partOfSpeech,
       cefr: span.cefr,
       explanation: span.explanation,
+      isOriginTrack: span.sourceTrackId === trackId,
     });
+  }
+
+  async function handleExplainContext() {
+    if (!selection || !BACKEND_URL || selection.lineIndex < 0) return;
+    setContextNote({ loading: true, text: null });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/vocab/explain`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId,
+          lineIndex: selection.lineIndex,
+          selectedText: selection.text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "解説の取得に失敗しました");
+      setContextNote({ loading: false, text: data.explanation });
+    } catch (err) {
+      setContextNote({
+        loading: false,
+        text: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
   }
 
   async function handleExplain() {
@@ -350,7 +390,9 @@ export default function LyricsList({
           className="flex flex-col gap-1 py-3"
         >
           <p className="break-words font-medium leading-relaxed">
-            {renderWithHighlights(line.original, line.knownSpans, line.hardSpans, handleKnownClick)}
+            {renderWithHighlights(line.original, line.knownSpans, line.hardSpans, (span, el, matchedText) =>
+              handleKnownClick(span, el, matchedText, line.lineIndex)
+            )}
           </p>
           {line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
@@ -499,10 +541,22 @@ export default function LyricsList({
                 {popup.meaning}
                 {popup.cefr && <span className="ml-1 text-zinc-400">({popup.cefr})</span>}
               </p>
-              {popup.explanation && (
+              {popup.isOriginTrack && popup.explanation ? (
                 <p className="break-words rounded bg-zinc-50 p-2 text-xs text-zinc-600">
                   {popup.explanation}
                 </p>
+              ) : contextNote.text ? (
+                <p className="break-words rounded bg-zinc-50 p-2 text-xs text-zinc-600">
+                  {contextNote.text}
+                </p>
+              ) : (
+                <button
+                  onClick={handleExplainContext}
+                  disabled={contextNote.loading}
+                  className="w-fit text-xs text-zinc-500 underline decoration-dotted hover:text-zinc-700 disabled:opacity-50"
+                >
+                  {contextNote.loading ? "この曲での意味を確認中..." : "🔍 この曲での意味を見る"}
+                </button>
               )}
 
               {confirmingDelete ? (

@@ -35,6 +35,7 @@ export default async function TrackPage({
       partOfSpeech: true,
       cefr: true,
       explanation: true,
+      sourceTrackId: true,
     },
   });
   const matcher = buildMatcher(vocabEntries);
