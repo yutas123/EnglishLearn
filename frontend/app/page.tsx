@@ -14,7 +14,7 @@ export default async function HomePage() {
   return (
     <main className="flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">EnglishLearn</h1>
+        <h1 className="text-2xl font-bold">VerseVocab</h1>
         <AddCurrentTrackButton />
       </header>
 

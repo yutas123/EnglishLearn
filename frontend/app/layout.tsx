@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EnglishLearn",
+  title: "VerseVocab",
   description: "洋楽歌詞で学ぶ対訳・解説",
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
         <div className="mx-auto max-w-3xl px-4 py-8">
           <header className="mb-6 flex items-center justify-between">
             <Link href="/" className="text-sm font-semibold text-zinc-800">
-              EnglishLearn
+              VerseVocab
             </Link>
             <Link
               href="/vocabulary"
