@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
-import { parseSectionLabel, colorForPerformer } from "@/lib/sectionLabel";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -386,10 +385,8 @@ export default function LyricsList({
     <div ref={containerRef} className="relative flex flex-col divide-y divide-zinc-100">
       {lines.map((line, index) => {
         const prevLabel = index > 0 ? lines[index - 1].sectionLabel : null;
-        const section =
-          line.sectionLabel && line.sectionLabel !== prevLabel
-            ? parseSectionLabel(line.sectionLabel)
-            : null;
+        const sectionLabel =
+          line.sectionLabel && line.sectionLabel !== prevLabel ? line.sectionLabel : null;
 
         return (
         <div
@@ -398,19 +395,9 @@ export default function LyricsList({
           data-original={line.original}
           className="flex flex-col gap-1 py-3"
         >
-          {section && (
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                {section.sectionType}
-              </span>
-              {section.performers.map((performer) => (
-                <span
-                  key={performer}
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${colorForPerformer(performer)}`}
-                >
-                  {performer}
-                </span>
-              ))}
+          {sectionLabel && (
+            <div className="mb-1 text-xs font-semibold tracking-wide" style={{ color: "rgb(117 117 125)" }}>
+              [{sectionLabel}]
             </div>
           )}
           <p className="break-words font-medium leading-relaxed">
