@@ -382,7 +382,7 @@ export default function LyricsList({
   }
 
   return (
-    <div ref={containerRef} className="relative flex flex-col divide-y divide-zinc-100">
+    <div ref={containerRef} className="relative flex flex-col">
       {lines.map((line, index) => {
         const prevLabel = index > 0 ? lines[index - 1].sectionLabel : null;
         const sectionLabel =
