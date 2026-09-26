@@ -387,13 +387,16 @@ export default function LyricsList({
         const prevLabel = index > 0 ? lines[index - 1].sectionLabel : null;
         const sectionLabel =
           line.sectionLabel && line.sectionLabel !== prevLabel ? line.sectionLabel : null;
+        const isNewSection = Boolean(sectionLabel) && index > 0;
 
         return (
         <div
           key={line.id}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className="flex flex-col gap-1 py-3"
+          className={`flex flex-col gap-1 py-3 ${
+            isNewSection ? "border-t border-zinc-200 pt-4" : ""
+          }`}
         >
           {sectionLabel && (
             <div className="mb-1 text-xs font-semibold tracking-wide" style={{ color: "rgb(117 117 125)" }}>
