@@ -145,6 +145,17 @@ async function scrapeLyrics(url) {
         }
       }
 
+      // 説明文が短いとGeniusは「Read More」を付けないため、上記処理だけでは
+      // 説明文が本文の先頭に残ってしまう（改行なしで最初のセクション見出しと
+      // くっついていることが多い）。実際の歌詞は必ずセクション見出しから始まるため、
+      // 先頭が見出しでなければ最初の見出しの位置まで残った説明文を切り捨てる。
+      const sectionTagMatch = lyrics.match(
+        /\[(Intro|Verse|Chorus|Bridge|Outro|Pre-Chorus|Post-Chorus|Hook|Refrain|Instrumental|Interlude|Break)\b/i
+      );
+      if (sectionTagMatch && sectionTagMatch.index > 0) {
+        lyrics = lyrics.slice(sectionTagMatch.index);
+      }
+
       return lyrics;
     } catch (error) {
       if (attempt < MAX_RETRIES) {
