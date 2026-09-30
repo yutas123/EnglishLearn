@@ -8,6 +8,7 @@ import {
   pausePlayback,
   skipToNext,
   skipToPrevious,
+  playTrackByQuery,
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
@@ -509,6 +510,32 @@ app.post("/api/spotify/next", async (_req, res) => {
 app.post("/api/spotify/previous", async (_req, res) => {
   try {
     await skipToPrevious();
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/spotify/play-track — このアプリの楽曲ページで開いている曲をSpotifyで検索し再生開始する
+ * body: { trackId }
+ */
+app.post("/api/spotify/play-track", async (req, res) => {
+  try {
+    const { trackId } = req.body;
+    if (!trackId) {
+      return res.status(400).json({ error: "trackId は必須です" });
+    }
+
+    const track = await prisma.track.findUnique({
+      where: { id: trackId },
+      include: { album: true },
+    });
+    if (!track) {
+      return res.status(404).json({ error: "対象の曲が見つかりません" });
+    }
+
+    await playTrackByQuery(track.album.artistName, track.title);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

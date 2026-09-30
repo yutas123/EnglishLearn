@@ -76,7 +76,12 @@ export default async function TrackPage({
         </p>
       </header>
 
-      <SpotifyRemote />
+      <SpotifyRemote
+        trackId={track.id}
+        title={track.title}
+        artistName={track.album.artistName}
+        albumArtUrl={track.album.coverArtUrl}
+      />
 
       {track.analysis && (
         <details className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-600">

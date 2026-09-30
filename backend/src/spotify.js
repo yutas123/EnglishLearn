@@ -138,12 +138,16 @@ export async function getCurrentlyPlayingAlbum() {
  * 再生制御系（play/pause/next/previous）の共通リクエスト処理。
  * アクティブなデバイスがない場合404が返るため、分かりやすいメッセージに変換する。
  */
-async function playerControlRequest(path, method) {
+async function playerControlRequest(path, method, body) {
   const accessToken = await getAccessToken();
 
   const res = await fetch(`${PLAYER_URL}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   // 成功時はSpotify側の仕様で204（本文なし）が返る
@@ -153,7 +157,7 @@ async function playerControlRequest(path, method) {
 
   if (res.status === 404) {
     throw new Error(
-      "再生中のデバイスが見つかりません。Spotifyアプリで再生を開始してから操作してください"
+      "再生できるSpotifyデバイスが見つかりません。スマホなどでSpotifyアプリを開いてから操作してください"
     );
   }
 
@@ -198,6 +202,47 @@ export async function getPlaybackState() {
 
 export async function resumePlayback() {
   await playerControlRequest("/play", "PUT");
+}
+
+/**
+ * アーティスト名+曲名でSpotifyを検索し、見つかったトラックの再生を開始する
+ * （アプリの楽曲ページで開いている曲そのものを再生するための機能）。
+ * マッチングは searchAlbumArt と同じ「アーティスト完全一致→曲名完全一致」を優先する方針。
+ */
+export async function playTrackByQuery(artistName, trackTitle) {
+  const accessToken = await getAccessToken();
+  const q = encodeURIComponent(`track:${trackTitle} artist:${artistName}`);
+  const res = await fetch(
+    `https://api.spotify.com/v1/search?q=${q}&type=track&limit=10`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Spotify検索に失敗しました: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  const items = data.tracks?.items ?? [];
+  if (items.length === 0) {
+    throw new Error("Spotifyでこの曲が見つかりませんでした");
+  }
+
+  const normalize = (s) => s.toLowerCase().trim();
+  const targetArtist = normalize(artistName);
+  const targetTitle = normalize(trackTitle);
+
+  const exact = items.find(
+    (it) =>
+      it.artists?.some((a) => normalize(a.name) === targetArtist) &&
+      normalize(it.name) === targetTitle
+  );
+  const artistMatch = items.find((it) =>
+    it.artists?.some((a) => normalize(a.name) === targetArtist)
+  );
+  const chosen = exact ?? artistMatch ?? items[0];
+
+  await playerControlRequest("/play", "PUT", { uris: [chosen.uri] });
 }
 
 export async function pausePlayback() {
