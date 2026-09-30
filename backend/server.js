@@ -12,6 +12,7 @@ import {
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
+import { explainListeningDifficulty } from "./src/listening.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks } from "./src/genius.js";
 import { OPENAI_API_KEY, GENIUS_ACCESS_TOKEN } from "./src/config.js";
 
@@ -537,6 +538,80 @@ app.post("/api/spotify/play-track", async (req, res) => {
 
     await playTrackByQuery(track.album.artistName, track.title);
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/listening/mark — 行の「聞き取れなかった」マークをトグルする
+ * body: { trackId, lineIndex }
+ */
+app.post("/api/listening/mark", async (req, res) => {
+  try {
+    const { trackId, lineIndex } = req.body;
+    if (!trackId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "trackId / lineIndex は必須です" });
+    }
+
+    const existing = await prisma.listeningMark.findUnique({
+      where: { trackId_lineIndex: { trackId, lineIndex } },
+    });
+
+    if (existing) {
+      await prisma.listeningMark.delete({ where: { id: existing.id } });
+      return res.json({ marked: false });
+    }
+
+    await prisma.listeningMark.create({ data: { trackId, lineIndex } });
+    res.json({ marked: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/listening/explain — マークした行について、聞き取りにくい音声変化パターンをAIで解説（結果はキャッシュ）
+ * body: { trackId, lineIndex }
+ */
+app.post("/api/listening/explain", async (req, res) => {
+  try {
+    const { trackId, lineIndex } = req.body;
+    if (!trackId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "trackId / lineIndex は必須です" });
+    }
+
+    const mark = await prisma.listeningMark.findUnique({
+      where: { trackId_lineIndex: { trackId, lineIndex } },
+    });
+    if (!mark) {
+      return res.status(404).json({ error: "この行はマークされていません" });
+    }
+
+    if (mark.explanation) {
+      return res.json({ explanation: mark.explanation, costUsd: 0, cached: true });
+    }
+
+    const line = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
+    if (!line) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { explanation, costUsd } = await explainListeningDifficulty(
+      { lineOriginal: line.original, lineTranslation: line.translation },
+      OPENAI_API_KEY
+    );
+
+    await prisma.listeningMark.update({
+      where: { id: mark.id },
+      data: { explanation },
+    });
+
+    res.json({ explanation, costUsd, cached: false });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -32,6 +32,7 @@ model Track {
   vocabEntries     VocabEntry[]
   vocabOccurrences VocabOccurrence[]
   spanExplanations SpanExplanation[]
+  listeningMarks   ListeningMark[]
   createdAt        DateTime          @default(now())
 }
 
@@ -96,6 +97,17 @@ model SpanExplanation {
   createdAt    DateTime @default(now())
 
   @@unique([trackId, lineIndex, selectedText])
+}
+
+model ListeningMark {
+  id          String   @id @default(cuid())
+  trackId     String
+  track       Track    @relation(fields: [trackId], references: [id])
+  lineIndex   Int // 「聞き取れなかった」とマークした行
+  explanation String? // AIによる音声変化パターン解説（オンデマンド生成、キャッシュ）
+  createdAt   DateTime @default(now())
+
+  @@unique([trackId, lineIndex])
 }
 
 model Highlight {

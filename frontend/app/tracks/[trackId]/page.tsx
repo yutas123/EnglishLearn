@@ -69,11 +69,21 @@ export default async function TrackPage({
         ← {track.album.albumTitle}
       </Link>
 
-      <header>
-        <h1 className="break-words text-xl font-bold">{track.title}</h1>
-        <p className="break-words text-sm text-zinc-500">
-          {track.album.artistName}
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="break-words text-xl font-bold">{track.title}</h1>
+          <p className="break-words text-sm text-zinc-500">
+            {track.album.artistName}
+          </p>
+        </div>
+        <Link
+          href={`/tracks/${track.id}/listening`}
+          aria-label="リスニングモード"
+          title="リスニングモード（聞き取れなかった箇所をマーク）"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-base hover:bg-zinc-50"
+        >
+          👂
+        </Link>
       </header>
 
       <SpotifyRemote
