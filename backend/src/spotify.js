@@ -166,8 +166,8 @@ async function playerControlRequest(path, method, body) {
 }
 
 /**
- * 現在の再生状態（曲名・アーティスト・ジャケット・再生中かどうか）を取得
- * @returns {Promise<{isPlaying: boolean, trackName: string, artistName: string|null, albumArtUrl: string|null} | null>}
+ * 現在の再生状態（曲名・アーティスト・ジャケット・再生中かどうか・再生位置/曲の長さ）を取得
+ * @returns {Promise<{isPlaying: boolean, trackName: string, artistName: string|null, albumArtUrl: string|null, progressMs: number|null, durationMs: number|null} | null>}
  */
 export async function getPlaybackState() {
   const accessToken = await getAccessToken();
@@ -197,6 +197,8 @@ export async function getPlaybackState() {
     trackName: item.name,
     artistName: item.artists?.[0]?.name ?? null,
     albumArtUrl: item.album?.images?.[0]?.url ?? null,
+    progressMs: typeof data.progress_ms === "number" ? data.progress_ms : null,
+    durationMs: typeof item.duration_ms === "number" ? item.duration_ms : null,
   };
 }
 

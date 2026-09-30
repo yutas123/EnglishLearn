@@ -472,7 +472,16 @@ app.post("/api/vocab/explain", async (req, res) => {
 app.get("/api/spotify/state", async (_req, res) => {
   try {
     const state = await getPlaybackState();
-    res.json(state ?? { isPlaying: false, trackName: null, artistName: null, albumArtUrl: null });
+    res.json(
+      state ?? {
+        isPlaying: false,
+        trackName: null,
+        artistName: null,
+        albumArtUrl: null,
+        progressMs: null,
+        durationMs: null,
+      }
+    );
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

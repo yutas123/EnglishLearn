@@ -107,7 +107,12 @@ export default async function TrackPage({
       {track.translations.length === 0 ? (
         <p className="text-sm text-zinc-500">歌詞データがありません。</p>
       ) : (
-        <LyricsList trackId={track.id} lines={linesWithSpans} />
+        <LyricsList
+          trackId={track.id}
+          lines={linesWithSpans}
+          title={track.title}
+          artistName={track.album.artistName}
+        />
       )}
 
       <nav className="flex items-center justify-between gap-2 border-t border-zinc-200 pt-4 text-sm font-medium">

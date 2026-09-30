@@ -120,12 +120,20 @@ function renderWithHighlights(
   return nodes;
 }
 
+function normalize(s: string) {
+  return s.toLowerCase().trim();
+}
+
 export default function LyricsList({
   trackId,
   lines,
+  title,
+  artistName,
 }: {
   trackId: string;
   lines: Line[];
+  title: string;
+  artistName: string;
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +145,47 @@ export default function LyricsList({
     loading: false,
     text: null,
   });
+  const [currentSectionLabel, setCurrentSectionLabel] = useState<string | null>(null);
+
+  // Spotifyでこのページの曲が再生中なら、再生位置÷曲の長さを行数に按分して
+  // 「だいたい今このセクション」を推定する（行/秒単位の正確な同期ではなく、あくまで目安）
+  useEffect(() => {
+    if (!BACKEND_URL) return;
+
+    async function pollSection() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/spotify/state`);
+        const data = await res.json();
+
+        const isThisTrack =
+          data.isPlaying &&
+          normalize(data.trackName ?? "") === normalize(title) &&
+          normalize(data.artistName ?? "") === normalize(artistName) &&
+          typeof data.progressMs === "number" &&
+          typeof data.durationMs === "number" &&
+          data.durationMs > 0;
+
+        if (!isThisTrack || lines.length === 0) {
+          setCurrentSectionLabel(null);
+          return;
+        }
+
+        const ratio = Math.min(1, Math.max(0, data.progressMs / data.durationMs));
+        const estimatedIndex = Math.min(
+          lines.length - 1,
+          Math.floor(ratio * lines.length)
+        );
+        setCurrentSectionLabel(lines[estimatedIndex]?.sectionLabel ?? null);
+      } catch {
+        // 一時的なネットワークエラーはポーリング継続
+      }
+    }
+
+    pollSection();
+    const interval = setInterval(pollSection, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackId]);
 
   function closePopup() {
     setSelection(null);
@@ -388,19 +437,26 @@ export default function LyricsList({
         const sectionLabel =
           line.sectionLabel && line.sectionLabel !== prevLabel ? line.sectionLabel : null;
         const isNewSection = Boolean(sectionLabel) && index > 0;
+        const isCurrentSection =
+          Boolean(currentSectionLabel) && line.sectionLabel === currentSectionLabel;
 
         return (
         <div
           key={line.id}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className={`flex flex-col gap-1 py-3 ${
+          className={`flex flex-col gap-1 py-3 transition-colors duration-500 ${
             isNewSection ? "border-t border-zinc-200 pt-4" : ""
-          }`}
+          } ${isCurrentSection ? "-mx-2 rounded bg-amber-50 px-2" : ""}`}
         >
           {sectionLabel && (
-            <div className="mb-1 text-xs font-semibold tracking-wide" style={{ color: "rgb(117 117 125)" }}>
-              [{sectionLabel}]
+            <div
+              className={`mb-1 text-xs font-semibold tracking-wide ${
+                isCurrentSection ? "text-amber-600" : ""
+              }`}
+              style={isCurrentSection ? undefined : { color: "rgb(117 117 125)" }}
+            >
+              {isCurrentSection && "▶ "}[{sectionLabel}]
             </div>
           )}
           <p className="break-words font-medium leading-relaxed">
