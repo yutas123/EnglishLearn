@@ -617,6 +617,48 @@ app.post("/api/listening/explain", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/spotify/now-playing-match — 今Spotifyで流れている曲が、このアプリのDBに存在するか照合する
+ * （右下固定ボタン用。存在すればそのtrackIdと表示用情報を返す）
+ */
+app.get("/api/spotify/now-playing-match", async (_req, res) => {
+  try {
+    const state = await getPlaybackState();
+    if (!state || !state.trackName || !state.artistName) {
+      return res.json({ trackId: null });
+    }
+
+    const normalize = (s) => s.toLowerCase().trim();
+    const targetTitle = normalize(state.trackName);
+
+    const candidates = await prisma.track.findMany({
+      where: { album: { artistName: { equals: state.artistName, mode: "insensitive" } } },
+      include: { album: true },
+    });
+
+    const match =
+      candidates.find((t) => normalize(t.title) === targetTitle) ??
+      candidates.find(
+        (t) =>
+          normalize(t.title).includes(targetTitle) ||
+          targetTitle.includes(normalize(t.title))
+      );
+
+    if (!match) {
+      return res.json({ trackId: null });
+    }
+
+    res.json({
+      trackId: match.id,
+      title: match.title,
+      artistName: match.album.artistName,
+      albumArtUrl: match.album.coverArtUrl,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
   startWorker();

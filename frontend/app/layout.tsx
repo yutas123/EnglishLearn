@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import NowPlayingButton from "./components/NowPlayingButton";
 
 export const metadata: Metadata = {
   title: "VerseVocab",
@@ -29,6 +30,7 @@ export default function RootLayout({
           </header>
           {children}
         </div>
+        <NowPlayingButton />
       </body>
     </html>
   );
