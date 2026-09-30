@@ -7,6 +7,7 @@ import {
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const CURRENTLY_PLAYING_URL =
   "https://api.spotify.com/v1/me/player/currently-playing";
+const PLAYER_URL = "https://api.spotify.com/v1/me/player";
 
 let cachedAccessToken = null;
 let cachedExpiresAt = 0; // epoch ms
@@ -131,4 +132,82 @@ export async function getCurrentlyPlayingAlbum() {
   }
 
   return { artistName, albumName };
+}
+
+/**
+ * 再生制御系（play/pause/next/previous）の共通リクエスト処理。
+ * アクティブなデバイスがない場合404が返るため、分かりやすいメッセージに変換する。
+ */
+async function playerControlRequest(path, method) {
+  const accessToken = await getAccessToken();
+
+  const res = await fetch(`${PLAYER_URL}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  // 成功時はSpotify側の仕様で204（本文なし）が返る
+  if (res.status === 204 || res.ok) {
+    return;
+  }
+
+  if (res.status === 404) {
+    throw new Error(
+      "再生中のデバイスが見つかりません。Spotifyアプリで再生を開始してから操作してください"
+    );
+  }
+
+  const text = await res.text();
+  throw new Error(`Spotify操作に失敗しました: ${res.status} ${text}`);
+}
+
+/**
+ * 現在の再生状態（曲名・アーティスト・ジャケット・再生中かどうか）を取得
+ * @returns {Promise<{isPlaying: boolean, trackName: string, artistName: string|null, albumArtUrl: string|null} | null>}
+ */
+export async function getPlaybackState() {
+  const accessToken = await getAccessToken();
+
+  const res = await fetch(PLAYER_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  // 再生中のデバイスがない場合、Spotifyは204を返す
+  if (res.status === 204) {
+    return null;
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Spotify再生状況の取得に失敗しました: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  const item = data.item;
+  if (!item) {
+    return null;
+  }
+
+  return {
+    isPlaying: Boolean(data.is_playing),
+    trackName: item.name,
+    artistName: item.artists?.[0]?.name ?? null,
+    albumArtUrl: item.album?.images?.[0]?.url ?? null,
+  };
+}
+
+export async function resumePlayback() {
+  await playerControlRequest("/play", "PUT");
+}
+
+export async function pausePlayback() {
+  await playerControlRequest("/pause", "PUT");
+}
+
+export async function skipToNext() {
+  await playerControlRequest("/next", "POST");
+}
+
+export async function skipToPrevious() {
+  await playerControlRequest("/previous", "POST");
 }

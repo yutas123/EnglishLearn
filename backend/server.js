@@ -1,7 +1,14 @@
 import express from "express";
 import cors from "cors";
 import { prisma } from "./src/db.js";
-import { getCurrentlyPlayingAlbum } from "./src/spotify.js";
+import {
+  getCurrentlyPlayingAlbum,
+  getPlaybackState,
+  resumePlayback,
+  pausePlayback,
+  skipToNext,
+  skipToPrevious,
+} from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks } from "./src/genius.js";
@@ -452,6 +459,57 @@ app.post("/api/vocab/explain", async (req, res) => {
     });
 
     res.json({ explanation, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/spotify/state — 現在の再生状態を返す（フロントのリモコンUIがポーリング）
+ */
+app.get("/api/spotify/state", async (_req, res) => {
+  try {
+    const state = await getPlaybackState();
+    res.json(state ?? { isPlaying: false, trackName: null, artistName: null, albumArtUrl: null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/spotify/play, /pause, /next, /previous — Spotify再生をリモート操作
+ */
+app.post("/api/spotify/play", async (_req, res) => {
+  try {
+    await resumePlayback();
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/spotify/pause", async (_req, res) => {
+  try {
+    await pausePlayback();
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/spotify/next", async (_req, res) => {
+  try {
+    await skipToNext();
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/spotify/previous", async (_req, res) => {
+  try {
+    await skipToPrevious();
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

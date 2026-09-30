@@ -14,12 +14,16 @@ dotenv.config();
  *   2. backend/.env に SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET を設定する
  *   3. `node scripts/spotify-auth.js` を実行し、表示されたURLをブラウザで開いて許可する
  *   4. ターミナルに表示された refresh_token を Render の環境変数 SPOTIFY_REFRESH_TOKEN に設定する
+ *
+ * SCOPESを追加・変更した場合は、既存のrefresh_tokenには新しいスコープの権限が
+ * 含まれていないため、このスクリプトを再実行して新しいrefresh_tokenを取得し直す必要がある。
  */
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI = "http://127.0.0.1:8888/callback";
-const SCOPES = "user-read-currently-playing user-read-playback-state";
+const SCOPES =
+  "user-read-currently-playing user-read-playback-state user-modify-playback-state";
 const PORT = 8888;
 
 if (!CLIENT_ID || !CLIENT_SECRET) {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList from "../../components/LyricsList";
+import SpotifyRemote from "../../components/SpotifyRemote";
 
 export const revalidate = 3600;
 
@@ -74,6 +75,8 @@ export default async function TrackPage({
           {track.album.artistName}
         </p>
       </header>
+
+      <SpotifyRemote />
 
       {track.analysis && (
         <details className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-600">
