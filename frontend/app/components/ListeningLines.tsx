@@ -11,6 +11,7 @@ type Line = {
   translation: string;
   sectionLabel: string | null;
   isMarked: boolean;
+  explanation: string | null;
 };
 
 export default function ListeningLines({
@@ -24,7 +25,11 @@ export default function ListeningLines({
     () => new Set(lines.filter((l) => l.isMarked).map((l) => l.lineIndex))
   );
   const [pending, setPending] = useState<Set<number>>(new Set());
-  const [explanations, setExplanations] = useState<Record<number, string>>({});
+  const [explanations, setExplanations] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      lines.filter((l) => l.explanation).map((l) => [l.lineIndex, l.explanation as string])
+    )
+  );
   const [explaining, setExplaining] = useState<Set<number>>(new Set());
   const [errors, setErrors] = useState<Record<number, string>>({});
 

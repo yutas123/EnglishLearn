@@ -27,15 +27,19 @@ export default async function ListeningPage({
     notFound();
   }
 
-  const markedLineIndexes = new Set(marks.map((m) => m.lineIndex));
-  const lines = track.translations.map((line) => ({
-    id: line.id,
-    lineIndex: line.lineIndex,
-    original: line.original,
-    translation: line.translation,
-    sectionLabel: line.sectionLabel,
-    isMarked: markedLineIndexes.has(line.lineIndex),
-  }));
+  const markByLineIndex = new Map(marks.map((m) => [m.lineIndex, m]));
+  const lines = track.translations.map((line) => {
+    const mark = markByLineIndex.get(line.lineIndex);
+    return {
+      id: line.id,
+      lineIndex: line.lineIndex,
+      original: line.original,
+      translation: line.translation,
+      sectionLabel: line.sectionLabel,
+      isMarked: Boolean(mark),
+      explanation: mark?.explanation ?? null,
+    };
+  });
 
   return (
     <main className="flex flex-col gap-6">
