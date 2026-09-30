@@ -76,22 +76,22 @@ export default async function TrackPage({
             {track.album.artistName}
           </p>
         </div>
-        <Link
-          href={`/tracks/${track.id}/listening`}
-          aria-label="リスニングモード"
-          title="リスニングモード（聞き取れなかった箇所をマーク）"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-base hover:bg-zinc-50"
-        >
-          👂
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <SpotifyRemote
+            trackId={track.id}
+            title={track.title}
+            artistName={track.album.artistName}
+          />
+          <Link
+            href={`/tracks/${track.id}/listening`}
+            aria-label="リスニングモード"
+            title="リスニングモード（聞き取れなかった箇所をマーク）"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-base hover:bg-zinc-50"
+          >
+            👂
+          </Link>
+        </div>
       </header>
-
-      <SpotifyRemote
-        trackId={track.id}
-        title={track.title}
-        artistName={track.album.artistName}
-        albumArtUrl={track.album.coverArtUrl}
-      />
 
       {track.analysis && (
         <details className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-600">

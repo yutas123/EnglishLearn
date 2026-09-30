@@ -14,19 +14,13 @@ type Props = {
   trackId: string;
   title: string;
   artistName: string;
-  albumArtUrl: string | null;
 };
 
 function normalize(s: string) {
   return s.toLowerCase().trim();
 }
 
-export default function SpotifyRemote({
-  trackId,
-  title,
-  artistName,
-  albumArtUrl,
-}: Props) {
+export default function SpotifyRemote({ trackId, title, artistName }: Props) {
   const [state, setState] = useState<PlaybackState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,40 +88,19 @@ export default function SpotifyRemote({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-zinc-200 px-3 py-2">
-      {albumArtUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={albumArtUrl}
-          alt=""
-          className="h-10 w-10 shrink-0 rounded object-cover"
-        />
-      ) : (
-        <div className="h-10 w-10 shrink-0 rounded bg-zinc-100" />
-      )}
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{title}</p>
-        <p className="truncate text-xs text-zinc-500">{artistName}</p>
-      </div>
-
-      <button
-        onClick={handleToggle}
-        disabled={busy}
-        aria-label={isThisTrackPlaying ? "一時停止" : "この曲を再生"}
-        className="shrink-0 rounded-full p-2 text-lg hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isThisTrackPlaying ? "⏸" : "▶️"}
-      </button>
-
+    <button
+      onClick={handleToggle}
+      disabled={busy}
+      aria-label={isThisTrackPlaying ? "一時停止" : "この曲を再生"}
+      title={error ?? (isThisTrackPlaying ? "一時停止" : "この曲を再生")}
+      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-base hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 ${
+        error ? "border-red-300" : "border-zinc-300"
+      }`}
+    >
+      {isThisTrackPlaying ? "⏸" : "▶️"}
       {error && (
-        <p
-          className="max-w-[10rem] shrink-0 truncate text-xs text-red-600"
-          title={error}
-        >
-          {error}
-        </p>
+        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500" />
       )}
-    </div>
+    </button>
   );
 }

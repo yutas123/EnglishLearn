@@ -247,6 +247,72 @@ export async function playTrackByQuery(artistName, trackTitle) {
   await playerControlRequest("/play", "PUT", { uris: [chosen.uri] });
 }
 
+/**
+ * アーティスト名+アルバム名+曲名でSpotify上の該当トラックを探し、
+ * そのアルバムのcontext_uri付きで再生開始する。単曲のuri再生と異なり、
+ * Spotify本来のアルバム再生と同様に、曲が終わると自動で次の曲へ続く。
+ * アルバムや該当曲がSpotify上で見つからない場合は、次の曲への自動継続なしの
+ * 単曲再生（playTrackByQuery相当）にフォールバックする。
+ */
+export async function playTrack(artistName, albumTitle, trackTitle) {
+  const accessToken = await getAccessToken();
+  const normalize = (s) => s.toLowerCase().trim();
+  const targetArtist = normalize(artistName);
+  const targetAlbum = normalize(albumTitle);
+  const targetTrack = normalize(trackTitle);
+
+  const albumQ = encodeURIComponent(`album:${albumTitle} artist:${artistName}`);
+  const albumRes = await fetch(
+    `https://api.spotify.com/v1/search?q=${albumQ}&type=album&limit=10`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (albumRes.ok) {
+    const albumData = await albumRes.json();
+    const albumItems = albumData.albums?.items ?? [];
+
+    const albumExact = albumItems.find(
+      (a) =>
+        a.artists?.some((ar) => normalize(ar.name) === targetArtist) &&
+        normalize(a.name) === targetAlbum
+    );
+    const albumArtistMatch = albumItems.find((a) =>
+      a.artists?.some((ar) => normalize(ar.name) === targetArtist)
+    );
+    const chosenAlbum = albumExact ?? albumArtistMatch;
+
+    if (chosenAlbum) {
+      const tracksRes = await fetch(
+        `https://api.spotify.com/v1/albums/${chosenAlbum.id}/tracks?limit=50`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      if (tracksRes.ok) {
+        const tracksData = await tracksRes.json();
+        const trackItems = tracksData.items ?? [];
+
+        const trackExact = trackItems.find((t) => normalize(t.name) === targetTrack);
+        const trackContains = trackItems.find(
+          (t) =>
+            normalize(t.name).includes(targetTrack) || targetTrack.includes(normalize(t.name))
+        );
+        const chosenTrack = trackExact ?? trackContains;
+
+        if (chosenTrack) {
+          await playerControlRequest("/play", "PUT", {
+            context_uri: chosenAlbum.uri,
+            offset: { uri: chosenTrack.uri },
+          });
+          return;
+        }
+      }
+    }
+  }
+
+  // アルバム/該当曲が見つからない場合は単曲再生にフォールバック
+  await playTrackByQuery(artistName, trackTitle);
+}
+
 export async function pausePlayback() {
   await playerControlRequest("/pause", "PUT");
 }

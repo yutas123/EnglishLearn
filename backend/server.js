@@ -8,7 +8,7 @@ import {
   pausePlayback,
   skipToNext,
   skipToPrevious,
-  playTrackByQuery,
+  playTrack,
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
@@ -527,7 +527,8 @@ app.post("/api/spotify/previous", async (_req, res) => {
 });
 
 /**
- * POST /api/spotify/play-track — このアプリの楽曲ページで開いている曲をSpotifyで検索し再生開始する
+ * POST /api/spotify/play-track — このアプリの楽曲ページで開いている曲を、アルバムcontext付きで
+ * Spotify上で再生開始する（曲が終われば通常のアルバム再生同様に次の曲へ自動継続する）
  * body: { trackId }
  */
 app.post("/api/spotify/play-track", async (req, res) => {
@@ -545,7 +546,7 @@ app.post("/api/spotify/play-track", async (req, res) => {
       return res.status(404).json({ error: "対象の曲が見つかりません" });
     }
 
-    await playTrackByQuery(track.album.artistName, track.title);
+    await playTrack(track.album.artistName, track.album.albumTitle, track.title);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
