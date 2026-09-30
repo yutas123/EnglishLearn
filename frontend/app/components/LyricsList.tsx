@@ -445,13 +445,13 @@ export default function LyricsList({
           key={line.id}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className={`flex flex-col gap-1 py-3 transition-colors duration-500 ${
+          className={`flex flex-col gap-1 py-3 ${
             isNewSection ? "border-t border-zinc-200 pt-4" : ""
-          } ${isCurrentSection ? "-mx-2 rounded bg-amber-50 px-2" : ""}`}
+          }`}
         >
           {sectionLabel && (
             <div
-              className={`mb-1 text-xs font-semibold tracking-wide ${
+              className={`mb-1 text-xs font-semibold tracking-wide transition-colors duration-500 ${
                 isCurrentSection ? "text-amber-600" : ""
               }`}
               style={isCurrentSection ? undefined : { color: "rgb(117 117 125)" }}
