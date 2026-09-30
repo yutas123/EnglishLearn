@@ -9,7 +9,7 @@ export default async function VocabularyReviewPage() {
     where: { nextReviewAt: { lte: new Date() } },
     orderBy: { nextReviewAt: "asc" },
     take: 20,
-    select: { id: true, term: true, meaning: true, partOfSpeech: true, cefr: true },
+    select: { id: true, term: true, meaning: true, partOfSpeech: true, cefr: true, ipa: true },
   });
 
   return (

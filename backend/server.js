@@ -215,6 +215,7 @@ app.post("/api/vocab/preview", async (req, res) => {
         meaning: existing.meaning,
         partOfSpeech: existing.partOfSpeech,
         cefr: existing.cefr,
+        ipa: existing.ipa,
         isExisting: true,
         costUsd: 0,
       });
@@ -245,6 +246,7 @@ app.post("/api/vocab/preview", async (req, res) => {
         meaning: normalizedExisting.meaning,
         partOfSpeech: normalizedExisting.partOfSpeech,
         cefr: normalizedExisting.cefr,
+        ipa: normalizedExisting.ipa,
         isExisting: true,
         costUsd: result.costUsd,
       });
@@ -255,6 +257,7 @@ app.post("/api/vocab/preview", async (req, res) => {
       meaning: result.meaning,
       partOfSpeech: result.partOfSpeech,
       cefr: result.cefr,
+      ipa: result.ipa,
       isExisting: false,
       costUsd: result.costUsd,
     });
@@ -266,11 +269,21 @@ app.post("/api/vocab/preview", async (req, res) => {
 /**
  * POST /api/vocab/register — 単語帳への登録を確定する（同一語彙は再登録せず出現だけ追加）。
  * meaning/partOfSpeech/cefrが渡された場合はプレビュー済みとみなしAI呼び出しをスキップする。
- * body: { term, isPhrase, trackId, lineIndex, meaning?, partOfSpeech?, cefr?, explanation? }
+ * body: { term, isPhrase, trackId, lineIndex, meaning?, partOfSpeech?, cefr?, ipa?, explanation? }
  */
 app.post("/api/vocab/register", async (req, res) => {
   try {
-    const { term, isPhrase, trackId, lineIndex, meaning: previewedMeaning, partOfSpeech: previewedPos, cefr: previewedCefr, explanation } = req.body;
+    const {
+      term,
+      isPhrase,
+      trackId,
+      lineIndex,
+      meaning: previewedMeaning,
+      partOfSpeech: previewedPos,
+      cefr: previewedCefr,
+      ipa: previewedIpa,
+      explanation,
+    } = req.body;
 
     if (!term || typeof term !== "string" || !trackId || typeof lineIndex !== "number") {
       return res.status(400).json({ error: "term / trackId / lineIndex は必須です" });
@@ -292,13 +305,14 @@ app.post("/api/vocab/register", async (req, res) => {
       where: { term_isPhrase: { term: rawLowered, isPhrase: rawIsPhrase } },
     });
     let costUsd = 0;
-    let meaning, partOfSpeech, cefr;
+    let meaning, partOfSpeech, cefr, ipa;
     let isNewEntry = false;
 
     if (vocabEntry) {
       meaning = vocabEntry.meaning;
       partOfSpeech = vocabEntry.partOfSpeech;
       cefr = vocabEntry.cefr;
+      ipa = vocabEntry.ipa;
 
       // プレビュー時点でなかった解説が今回渡されたら追記する
       if (explanation && !vocabEntry.explanation) {
@@ -317,6 +331,7 @@ app.post("/api/vocab/register", async (req, res) => {
           meaning: previewedMeaning,
           partOfSpeech: previewedPos ?? null,
           cefr: previewedCefr ?? null,
+          ipa: previewedIpa ?? null,
           explanation: explanation ?? null,
           sourceTrackId: trackId,
           sourceLineIndex: lineIndex,
@@ -325,6 +340,7 @@ app.post("/api/vocab/register", async (req, res) => {
       meaning = previewedMeaning;
       partOfSpeech = previewedPos ?? null;
       cefr = previewedCefr ?? null;
+      ipa = previewedIpa ?? null;
       isNewEntry = true;
     } else {
       // プレビューを経ていない直接呼び出し（フォールバック）
@@ -345,6 +361,7 @@ app.post("/api/vocab/register", async (req, res) => {
       meaning = result.meaning;
       partOfSpeech = result.partOfSpeech;
       cefr = result.cefr;
+      ipa = result.ipa;
 
       const normalizedTerm = result.term.toLowerCase();
 
@@ -361,6 +378,7 @@ app.post("/api/vocab/register", async (req, res) => {
             meaning,
             partOfSpeech,
             cefr,
+            ipa,
             explanation: explanation ?? null,
             sourceTrackId: trackId,
             sourceLineIndex: lineIndex,
@@ -388,6 +406,7 @@ app.post("/api/vocab/register", async (req, res) => {
       meaning,
       partOfSpeech,
       cefr,
+      ipa,
       explanation: vocabEntry.explanation,
       isNewEntry,
       costUsd,

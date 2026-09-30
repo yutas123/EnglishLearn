@@ -31,6 +31,7 @@ export default async function TrackPage({
         meaning: true,
         partOfSpeech: true,
         cefr: true,
+        ipa: true,
         explanation: true,
         sourceTrackId: true,
       },

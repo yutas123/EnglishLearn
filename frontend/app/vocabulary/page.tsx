@@ -55,6 +55,9 @@ export default async function VocabularyPage({
             <li key={entry.id} className="flex flex-col gap-1 py-3">
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="font-semibold">{entry.term}</span>
+                {entry.ipa && (
+                  <span className="text-xs text-zinc-400">{entry.ipa}</span>
+                )}
                 {entry.partOfSpeech && (
                   <span className="text-xs text-zinc-400">[{entry.partOfSpeech}]</span>
                 )}

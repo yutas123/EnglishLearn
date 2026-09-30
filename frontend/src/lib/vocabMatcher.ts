@@ -7,6 +7,7 @@ export type VocabTermInput = {
   meaning: string;
   partOfSpeech: string | null;
   cefr: string | null;
+  ipa: string | null;
   explanation: string | null;
   sourceTrackId: string;
 };
@@ -17,6 +18,7 @@ export type KnownSpan = MatchSpan & {
   meaning: string;
   partOfSpeech: string | null;
   cefr: string | null;
+  ipa: string | null;
   explanation: string | null;
   sourceTrackId: string;
 };
@@ -93,6 +95,7 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           meaning: entry.meaning,
           partOfSpeech: entry.partOfSpeech,
           cefr: entry.cefr,
+          ipa: entry.ipa,
           explanation: entry.explanation,
           sourceTrackId: entry.sourceTrackId,
         });
@@ -119,6 +122,7 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           meaning: entry.meaning,
           partOfSpeech: entry.partOfSpeech,
           cefr: entry.cefr,
+          ipa: entry.ipa,
           explanation: entry.explanation,
           sourceTrackId: entry.sourceTrackId,
         });

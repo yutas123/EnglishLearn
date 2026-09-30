@@ -41,10 +41,17 @@ type PopupState =
       meaning: string;
       partOfSpeech: string | null;
       cefr: string | null;
+      ipa: string | null;
       explanation: string | null;
       isExisting: boolean;
     }
-  | { mode: "registered"; meaning: string; partOfSpeech: string | null; cefr: string | null }
+  | {
+      mode: "registered";
+      meaning: string;
+      partOfSpeech: string | null;
+      cefr: string | null;
+      ipa: string | null;
+    }
   | {
       mode: "viewEntry";
       vocabEntryId: string;
@@ -52,6 +59,7 @@ type PopupState =
       meaning: string;
       partOfSpeech: string | null;
       cefr: string | null;
+      ipa: string | null;
       explanation: string | null;
       isOriginTrack: boolean;
     }
@@ -284,6 +292,7 @@ export default function LyricsList({
       meaning: span.meaning,
       partOfSpeech: span.partOfSpeech,
       cefr: span.cefr,
+      ipa: span.ipa,
       explanation: span.explanation,
       isOriginTrack: span.sourceTrackId === trackId,
     });
@@ -360,6 +369,7 @@ export default function LyricsList({
         meaning: data.meaning,
         partOfSpeech: data.partOfSpeech,
         cefr: data.cefr,
+        ipa: data.ipa,
         explanation: lastExplanation,
         isExisting: data.isExisting,
       });
@@ -387,6 +397,7 @@ export default function LyricsList({
           meaning: confirmed.meaning,
           partOfSpeech: confirmed.partOfSpeech,
           cefr: confirmed.cefr,
+          ipa: confirmed.ipa,
           explanation: confirmed.explanation,
         }),
       });
@@ -397,6 +408,7 @@ export default function LyricsList({
         meaning: data.meaning,
         partOfSpeech: data.partOfSpeech,
         cefr: data.cefr,
+        ipa: data.ipa,
       });
       router.refresh();
     } catch (err) {
@@ -544,7 +556,12 @@ export default function LyricsList({
               <p className="text-xs font-medium text-zinc-500">
                 {popup.isExisting ? "この語彙は登録済みです" : "以下の内容で登録します"}
               </p>
-              <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
+              <p className="break-words font-semibold text-zinc-800">
+                {popup.term}
+                {popup.ipa && (
+                  <span className="ml-2 font-normal text-zinc-400">{popup.ipa}</span>
+                )}
+              </p>
               <p className="break-words text-zinc-700">
                 {popup.partOfSpeech && (
                   <span className="mr-1 text-zinc-400">[{popup.partOfSpeech}]</span>
@@ -578,6 +595,7 @@ export default function LyricsList({
             <>
               <p className="text-xs font-medium text-emerald-700">📔 単語帳に登録しました</p>
               <p className="break-words text-zinc-700">
+                {popup.ipa && <span className="mr-1 text-zinc-400">{popup.ipa}</span>}
                 {popup.partOfSpeech && (
                   <span className="mr-1 text-zinc-400">[{popup.partOfSpeech}]</span>
                 )}
@@ -596,7 +614,12 @@ export default function LyricsList({
           {popup.mode === "viewEntry" && (
             <>
               <div className="flex items-start justify-between gap-2">
-                <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
+                <p className="break-words font-semibold text-zinc-800">
+                  {popup.term}
+                  {popup.ipa && (
+                    <span className="ml-2 font-normal text-zinc-400">{popup.ipa}</span>
+                  )}
+                </p>
                 <button
                   onClick={closePopup}
                   aria-label="閉じる"

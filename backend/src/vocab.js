@@ -10,7 +10,7 @@ const TIMEOUT_MS = 60000; // 60秒（単発呼び出しなのでチャンク処�
  * （文脈固有のニュアンスは/api/vocab/explainで曲・行単位に別途取得する）。
  * @param {{ term: string, isPhrase: boolean, lineOriginal: string, lineTranslation: string }} input
  * @param {string} apiKey
- * @returns {{ term: string, meaning: string, partOfSpeech: string, cefr: string|null, costUsd: number }}
+ * @returns {{ term: string, meaning: string, partOfSpeech: string, cefr: string|null, ipa: string|null, costUsd: number }}
  */
 export async function lemmatizeAndDefine(
   { term, isPhrase, lineOriginal, lineTranslation },
@@ -23,6 +23,10 @@ export async function lemmatizeAndDefine(
 前後の余分な空白や句読点のトリミングのみ行い、意味を壊さないよう選択された形にできるだけ近い形を"term"として返してください。`
     : `これは単語1つです。"term"には辞書の見出し語形（原形・単数形など）を返してください（例: "gave"→"give", "running"→"run"）。`;
 
+  const ipaInstruction = isPhrase
+    ? `"ipa"には必ずnullを入れてください（複数語からなる熟語・イディオムには発音記号を付けません）。`
+    : `"ipa"には、その単語のアメリカ英語での発音記号を国際音声記号(IPA)で、スラッシュ込みで返してください（例: "though"→"/ðoʊ/"）。`;
+
   const prompt = `【英語学習：単語帳登録用の情報抽出】
 
 以下は歌詞から学習者が選択した表現です。この表現について情報を抽出してください。
@@ -33,6 +37,8 @@ export async function lemmatizeAndDefine(
 
 ${normalizationInstruction}
 
+${ipaInstruction}
+
 この表現はこの曲以外の歌詞でも同じ語として単語帳に登録され、他の曲では別の文脈で使われます。
 "meaning"には、この行だけの意訳ではなく、辞書に載っているような、どの文脈でも通用する一般的な意味を書いてください
 （例:「every time」なら「〜するたびに（いつも）」のように、文脈に依存しない基本義）。
@@ -42,7 +48,8 @@ ${normalizationInstruction}
   "term": "登録用の表記",
   "meaning": "一般的な(辞書的な)日本語の意味（簡潔に、文脈依存の意訳は避ける）",
   "partOfSpeech": "品詞（熟語・イディオムの場合は「イディオム」）",
-  "cefr": "A1〜C2のいずれか（判断が難しい場合はnull）"
+  "cefr": "A1〜C2のいずれか（判断が難しい場合はnull）",
+  "ipa": "発音記号（単語の場合のみ。熟語・イディオムの場合はnull）"
 }`;
 
   let lastError;
@@ -75,6 +82,7 @@ ${normalizationInstruction}
         meaning: String(parsed.meaning).trim(),
         partOfSpeech: parsed.partOfSpeech ? String(parsed.partOfSpeech).trim() : null,
         cefr: parsed.cefr ? String(parsed.cefr).trim() : null,
+        ipa: !isPhrase && parsed.ipa ? String(parsed.ipa).trim() : null,
         costUsd,
       };
     } catch (error) {

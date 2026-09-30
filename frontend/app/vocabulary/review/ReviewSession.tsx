@@ -9,6 +9,7 @@ type Card = {
   meaning: string;
   partOfSpeech: string | null;
   cefr: string | null;
+  ipa: string | null;
 };
 
 export default function ReviewSession({ cards }: { cards: Card[] }) {
@@ -60,6 +61,7 @@ export default function ReviewSession({ cards }: { cards: Card[] }) {
 
       <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-zinc-200 p-8 text-center">
         <p className="text-2xl font-bold">{card.term}</p>
+        {card.ipa && <p className="text-sm text-zinc-400">{card.ipa}</p>}
         {revealed ? (
           <div className="flex flex-col items-center gap-1">
             {card.partOfSpeech && (
