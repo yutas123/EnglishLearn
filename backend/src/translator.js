@@ -27,12 +27,21 @@ export function calcCostUsd(usage) {
  * @param {string[]} lines - 歌詞の行配列（チャンク）
  * @returns {{items: Array<{original: string, translation: string, explanation: string}>, costUsd: number}}
  */
-async function translateChunk(openai, lines) {
+async function translateChunk(openai, lines, context = {}) {
+  const { artistName, sections } = context;
+  const hasSections = sections?.some(Boolean);
   const prompt = `【英語学習ノート作成 - 対訳と表現解説】
 
 私は英語学習者です。以下の英文フレーズについて、学習ノートを作成しています。
 各行の日本語訳を作成してください。
 メタ情報やセクション見出し等が含まれていても、そのまま翻訳してください。入力の検証やエラー返却は不要です。
+${artistName ? `
+この曲のアーティストは「${artistName}」です。` : ""}
+【話し手の性別と一人称】歌い手（話し手）の性別を、アーティスト名${hasSections ? "や各行の[歌い手/セクション]ラベル" : ""}から推測し、日本語訳の一人称・語尾を自然に合わせてください。
+- 女性: 「俺」「僕」「おれ」などの男性的な一人称は使わず、「私」「あたし」など自然なものにする
+- 男性: 「俺」「僕」など自然なものにする
+- 性別が判断できない、グループ、または曲中で性別が明らかに混在する場合は、中立的な「私」を基本にする
+- 歌詞の内容から性別が明らかなら、それを優先する
 
 各行について：
 1. translation: 自然で分かりやすい日本語訳
@@ -121,9 +130,11 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       // キー名を正規化（GPTが異なるキー名を返す場合に対応。キー名を優先し、
       // 無い場合のみ値の並び順にフォールバックする＝hardSpans追加後も既存フィールドの
       // 取り違えが起きないようにする）
-      const normalized = items.map((item) => {
+      const normalized = items.map((item, idx) => {
         const values = Object.values(item);
-        const original = item.original ?? values[0] ?? "";
+        // 行数が一致する場合は入力行をそのまま使う（[歌い手]ラベルがoriginalに混入するのを防ぐ）
+        const original =
+          items.length === lines.length ? lines[idx] : (item.original ?? values[0] ?? "");
         const translation = item.translation ?? values[1] ?? "";
         const explanation = item.explanation ?? values[2] ?? "";
         const rawHardSpans = Array.isArray(item.hardSpans) ? item.hardSpans : [];
@@ -188,12 +199,12 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
  * @param {string} apiKey - OpenAI APIキー
  * @returns {{translations: Array<{original: string, translation: string, explanation: string}>, costUsd: number}}
  */
-export async function translateLyrics(lines, apiKey) {
+export async function translateLyrics(lines, apiKey, { artistName, sectionByLine } = {}) {
   const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
 
   // CHUNK_SIZE以下ならそのまま処理
   if (lines.length <= CHUNK_SIZE) {
-    const { items, costUsd } = await translateChunk(openai, lines);
+    const { items, costUsd } = await translateChunk(openai, lines, { artistName, sections: sectionByLine });
     return { translations: items, costUsd };
   }
 
@@ -203,11 +214,14 @@ export async function translateLyrics(lines, apiKey) {
 
   const chunks = [];
   for (let i = 0; i < lines.length; i += CHUNK_SIZE) {
-    chunks.push(lines.slice(i, i + CHUNK_SIZE));
+    chunks.push({
+      lines: lines.slice(i, i + CHUNK_SIZE),
+      sections: sectionByLine?.slice(i, i + CHUNK_SIZE),
+    });
   }
 
   const results = await Promise.all(
-    chunks.map((chunk) => translateChunk(openai, chunk))
+    chunks.map((chunk) => translateChunk(openai, chunk.lines, { artistName, sections: chunk.sections }))
   );
 
   const allResults = results.flatMap((r) => r.items);

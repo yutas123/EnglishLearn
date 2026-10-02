@@ -49,7 +49,10 @@ export async function translateAndSaveTrack({ createdTrack, lyrics, artistName, 
   const { lines, sectionByLine } = lyrics;
   let trackCostUsd = 0;
 
-  const { translations, costUsd: translateCost } = await translateLyrics(lines, OPENAI_API_KEY);
+  const { translations, costUsd: translateCost } = await translateLyrics(lines, OPENAI_API_KEY, {
+    artistName,
+    sectionByLine,
+  });
   trackCostUsd += translateCost;
 
   await prisma.translation.createMany({
