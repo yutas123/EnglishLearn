@@ -58,6 +58,7 @@ ${ipaInstruction}
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-5-mini",
+        reasoning_effort: "low",
         messages: [
           {
             role: "system",
@@ -134,6 +135,7 @@ export async function explainSpan(
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-5-mini",
+        reasoning_effort: "low",
         messages: [
           {
             role: "system",
