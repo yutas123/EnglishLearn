@@ -178,6 +178,35 @@ async function scrapeLyrics(url) {
  * 誰が歌っているか表示するために、直後から次の見出しまでの各行に紐づくラベルとして保持する。
  * @returns {{ lines: string[], sectionByLine: (string|null)[] }}
  */
+const LONG_LINE_THRESHOLD = 200; // これを超える行だけを例外的に分割する（通常の歌詞には影響しない）
+const SPLIT_TARGET_LENGTH = 90; // 分割後の1行の目安文字数
+
+/**
+ * インタールードの語りなど、改行なしで極端に長い行を文単位で分割する。
+ * 閾値以下の行はそのまま返すので、通常の曲の行バランスは変わらない。
+ * 文末記号で分け、短い文は次の文とまとめ、それでも長い文は読点で分ける。
+ */
+export function splitLongLine(line) {
+  if (line.length <= LONG_LINE_THRESHOLD) return [line];
+
+  const sentences = line.split(/(?<=[.!?…])\s+/).flatMap((s) =>
+    s.length > LONG_LINE_THRESHOLD ? s.split(/(?<=,)\s+/) : [s]
+  );
+
+  const result = [];
+  let buf = "";
+  for (const s of sentences) {
+    if (buf && buf.length + 1 + s.length > SPLIT_TARGET_LENGTH) {
+      result.push(buf);
+      buf = s;
+    } else {
+      buf = buf ? `${buf} ${s}` : s;
+    }
+  }
+  if (buf) result.push(buf);
+  return result;
+}
+
 function parseLyricsToLines(lyrics) {
   // メタ情報として除外するパターン
   const metaPatterns = [
@@ -213,8 +242,10 @@ function parseLyricsToLines(lyrics) {
 
     if (metaPatterns.some((pattern) => pattern.test(line))) continue;
 
-    lines.push(line);
-    sectionByLine.push(currentSection);
+    for (const part of splitLongLine(line)) {
+      lines.push(part);
+      sectionByLine.push(currentSection);
+    }
   }
 
   return { lines, sectionByLine };
