@@ -493,11 +493,22 @@ export default function LyricsList({
         <div
           data-vocab-popup
           className="fixed z-50 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-lg"
-          style={{
-            top: Math.min(selection.rect.bottom + 8, window.innerHeight - 160),
-            left: Math.min(Math.max(8, selection.rect.left), window.innerWidth - 280 - 8),
-            maxWidth: 280,
-          }}
+          style={(() => {
+            const vh = window.innerHeight;
+            const spaceBelow = vh - selection.rect.bottom - 16;
+            const spaceAbove = selection.rect.top - 16;
+            const placeBelow = spaceBelow >= 240 || spaceBelow >= spaceAbove;
+            const space = Math.max(120, placeBelow ? spaceBelow : spaceAbove);
+            return {
+              ...(placeBelow
+                ? { top: selection.rect.bottom + 8 }
+                : { bottom: vh - selection.rect.top + 8 }),
+              left: Math.min(Math.max(8, selection.rect.left), window.innerWidth - 280 - 8),
+              maxWidth: 280,
+              maxHeight: space,
+              overflowY: "auto" as const,
+            };
+          })()}
         >
           {popup.mode === "menu" && (
             <div className="flex gap-2">

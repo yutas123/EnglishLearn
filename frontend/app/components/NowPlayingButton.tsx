@@ -37,14 +37,16 @@ export default function NowPlayingButton() {
     };
   }, []);
 
-  // 既にその曲のページ（通常表示/リスニングモード）を見ている場合は出さない
-  const alreadyThere = match && pathname?.startsWith(`/tracks/${match.trackId}`);
+  // その曲のページを見ている間も表示し続ける（歌詞を見ながらタイトルを確認できるように）
+  const alreadyThere = !!pathname?.startsWith(`/tracks/${match?.trackId}`);
 
-  if (!match || alreadyThere) return null;
+  if (!match) return null;
 
   return (
     <button
-      onClick={() => router.push(`/tracks/${match.trackId}`)}
+      onClick={() => {
+        if (!alreadyThere) router.push(`/tracks/${match.trackId}`);
+      }}
       className="fixed bottom-4 right-4 z-40 flex max-w-[16rem] items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2 text-left shadow-lg hover:bg-zinc-50"
     >
       {match.albumArtUrl ? (
@@ -62,7 +64,7 @@ export default function NowPlayingButton() {
           🎧 {match.title}
         </span>
         <span className="block truncate text-[11px] text-zinc-500">
-          {match.artistName} を開く
+          {alreadyThere ? `${match.artistName} · 再生中` : `${match.artistName} を開く`}
         </span>
       </span>
     </button>
