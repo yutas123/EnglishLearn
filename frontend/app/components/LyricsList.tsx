@@ -495,14 +495,10 @@ export default function LyricsList({
           className="fixed z-50 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-lg"
           style={(() => {
             const vh = window.innerHeight;
-            const spaceBelow = vh - selection.rect.bottom - 16;
-            const spaceAbove = selection.rect.top - 16;
-            const placeBelow = spaceBelow >= 240 || spaceBelow >= spaceAbove;
-            const space = Math.max(120, placeBelow ? spaceBelow : spaceAbove);
+            // iOS標準のコピー/調べるメニューが選択範囲の上に出るため、常に下に表示する
+            const space = Math.max(120, vh - selection.rect.bottom - 16);
             return {
-              ...(placeBelow
-                ? { top: selection.rect.bottom + 8 }
-                : { bottom: vh - selection.rect.top + 8 }),
+              top: selection.rect.bottom + 8,
               left: Math.min(Math.max(8, selection.rect.left), window.innerWidth - 280 - 8),
               maxWidth: 280,
               maxHeight: space,

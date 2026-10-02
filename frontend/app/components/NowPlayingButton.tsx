@@ -47,17 +47,17 @@ export default function NowPlayingButton() {
       onClick={() => {
         if (!alreadyThere) router.push(`/tracks/${match.trackId}`);
       }}
-      className="fixed bottom-4 right-4 z-40 flex max-w-[16rem] items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2 text-left shadow-lg hover:bg-zinc-50"
+      className="flex min-w-0 items-center gap-2 rounded-full border border-zinc-200 bg-white px-2 py-1 text-left shadow-sm hover:bg-zinc-50"
     >
       {match.albumArtUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={match.albumArtUrl}
           alt=""
-          className="h-8 w-8 shrink-0 rounded object-cover"
+          className="h-7 w-7 shrink-0 rounded object-cover"
         />
       ) : (
-        <div className="h-8 w-8 shrink-0 rounded bg-zinc-100" />
+        <div className="h-7 w-7 shrink-0 rounded bg-zinc-100" />
       )}
       <span className="min-w-0">
         <span className="block truncate text-xs font-medium text-zinc-800">
