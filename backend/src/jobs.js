@@ -238,37 +238,60 @@ export async function processAlbumFromGenius(jobId, geniusAlbumId) {
     const { artistName, name: albumTitle, coverArtUrl: geniusCoverArtUrl, url: geniusUrl } = albumDetail;
     await log(`🎯 アルバム確定: ${artistName} - ${albumTitle}`);
 
-    // 既に同一アルバムが登録済みなら再生成せずそのまま完了扱いにする
+    // 既に同一アルバムが登録済みの場合、全曲そろっていればそのまま完了扱いにする。
+    // 曲が欠けている（MusicBrainz経由で1曲しか取れなかった等）場合は、足りない曲だけ追加する。
     const existing = await prisma.album.findUnique({
       where: { artistName_albumTitle: { artistName, albumTitle } },
+      include: { tracks: { select: { id: true, title: true, trackNo: true } } },
     });
+
+    let album = existing;
+    let tracksToProcess = tracks;
     if (existing) {
-      await updateJob(jobId, {
-        status: "done",
-        albumId: existing.id,
-        progressLog: `✅ 既に登録済みのアルバムです: ${albumTitle}`,
-      });
-      return;
+      const normalize = (s) => s.trim().toLowerCase();
+      const registered = new Set(existing.tracks.map((t) => normalize(t.title)));
+      tracksToProcess = tracks.filter((t) => !registered.has(normalize(t.title)));
+
+      // 登録済みの曲の曲順がGeniusと食い違っていれば合わせる（MusicBrainz経由で不完全に登録された場合など）
+      for (const reg of existing.tracks) {
+        const match = tracks.find((t) => normalize(t.title) === normalize(reg.title));
+        if (match && match.trackNo !== reg.trackNo) {
+          await prisma.track.update({ where: { id: reg.id }, data: { trackNo: match.trackNo } });
+        }
+      }
+
+      if (tracksToProcess.length === 0) {
+        await updateJob(jobId, {
+          status: "done",
+          albumId: existing.id,
+          progressLog: `✅ 既に登録済みのアルバムです: ${albumTitle}`,
+        });
+        return;
+      }
+      await updateJob(jobId, { albumId: existing.id });
+      await log(`➕ 未登録の ${tracksToProcess.length} 曲を既存アルバムに追加します: ${albumTitle}`);
     }
 
-    await log(`🎧 ${tracks.length} 曲取得`);
-    await updateJob(jobId, { totalTracks: tracks.length });
+    await log(`🎧 ${tracksToProcess.length} 曲取得`);
+    await updateJob(jobId, { totalTracks: tracksToProcess.length });
 
-    // ジャケット画像はユーザーが確認画面で見た版と一致させるため、Genius提供のものを優先する
-    const coverArtUrl = geniusCoverArtUrl ?? (await getCoverArtUrl({ artistName, albumTitle }));
-    await log(coverArtUrl ? `🖼️ ジャケット画像を取得` : `⚠️ ジャケット画像が見つかりません`);
+    if (!existing) {
+      // ジャケット画像はユーザーが確認画面で見た版と一致させるため、Genius提供のものを優先する
+      const coverArtUrl = geniusCoverArtUrl ?? (await getCoverArtUrl({ artistName, albumTitle }));
+      await log(coverArtUrl ? `🖼️ ジャケット画像を取得` : `⚠️ ジャケット画像が見つかりません`);
 
-    const album = await prisma.album.create({
-      data: { artistName, albumTitle, releaseId: null, coverArtUrl, geniusUrl },
-    });
-    await updateJob(jobId, { albumId: album.id });
-    await log(`📀 アルバム作成完了: ${albumTitle}`);
+      album = await prisma.album.create({
+        data: { artistName, albumTitle, releaseId: null, coverArtUrl, geniusUrl },
+      });
+      await updateJob(jobId, { albumId: album.id });
+      await log(`📀 アルバム作成完了: ${albumTitle}`);
+    }
 
     await processTracks({
       jobId,
       albumId: album.id,
       artistName,
-      tracks,
+      tracks: tracksToProcess,
       getLyricsForTrack: (track) => getLyricsFromUrl(track.url),
     });
 
