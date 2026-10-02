@@ -16,21 +16,21 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="min-h-screen font-sans antialiased">
-        <div className="mx-auto max-w-3xl px-4 py-8">
-          <header className="sticky top-0 z-40 -mx-4 mb-6 flex items-center justify-between gap-2 bg-white/90 px-4 py-2 backdrop-blur">
-            <Link href="/" className="shrink-0 text-sm font-semibold text-zinc-800">
+        <div className="mx-auto max-w-3xl px-4 pb-8 pt-16">
+          <header className="mb-6 flex items-center justify-between">
+            <Link href="/" className="text-sm font-semibold text-zinc-800">
               VerseVocab
             </Link>
-            <NowPlayingButton />
             <Link
               href="/vocabulary"
-              className="shrink-0 rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
             >
               📔 単語帳
             </Link>
           </header>
           {children}
         </div>
+        <NowPlayingButton />
       </body>
     </html>
   );
