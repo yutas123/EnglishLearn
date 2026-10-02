@@ -41,7 +41,7 @@ async function runWithConcurrency(items, concurrency, worker) {
  * 両方から使う。歌詞の取得方法だけが異なり、それ以降の処理は共通のため。
  * @returns {{ trackCostUsd: number, success: boolean }}
  */
-async function translateAndSaveTrack({ createdTrack, lyrics, artistName, trackTitle }) {
+export async function translateAndSaveTrack({ createdTrack, lyrics, artistName, trackTitle }) {
   if (!lyrics || lyrics.lines.length === 0) {
     return { trackCostUsd: 0, success: false };
   }

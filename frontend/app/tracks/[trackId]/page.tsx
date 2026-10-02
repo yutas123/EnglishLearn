@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
+import RetryLyricsButton from "../../components/RetryLyricsButton";
 
 export const revalidate = 3600;
 
@@ -106,7 +107,7 @@ export default async function TrackPage({
       )}
 
       {track.translations.length === 0 ? (
-        <p className="text-sm text-zinc-500">歌詞データがありません。</p>
+        <RetryLyricsButton trackId={track.id} />
       ) : (
         <LyricsList
           trackId={track.id}

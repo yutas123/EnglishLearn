@@ -13,8 +13,14 @@ import {
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
-import { searchAlbums, getAlbumDetail, getAlbumTracks } from "./src/genius.js";
-import { OPENAI_API_KEY, GENIUS_ACCESS_TOKEN } from "./src/config.js";
+import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
+import { translateAndSaveTrack } from "./src/jobs.js";
+import {
+  OPENAI_API_KEY,
+  GENIUS_ACCESS_TOKEN,
+  VERCEL_REVALIDATE_URL,
+  VERCEL_REVALIDATE_SECRET,
+} from "./src/config.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -155,6 +161,66 @@ app.post("/api/jobs/from-genius", async (req, res) => {
     });
 
     res.json({ jobId: job.id, artistName, albumName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const retryingTrackIds = new Set(); // 同一曲の二重実行防止
+
+/**
+ * POST /api/tracks/:id/retry-lyrics — 歌詞データが無い曲について、その曲単体で
+ * 歌詞取得→対訳・解説生成をやり直す。歌詞が既にある曲には何もしない。
+ */
+app.post("/api/tracks/:id/retry-lyrics", async (req, res) => {
+  const trackId = req.params.id;
+  try {
+    if (!GENIUS_ACCESS_TOKEN || !OPENAI_API_KEY) {
+      return res.status(500).json({ error: "APIキーが設定されていません" });
+    }
+
+    const track = await prisma.track.findUnique({
+      where: { id: trackId },
+      include: { album: true, _count: { select: { translations: true } } },
+    });
+    if (!track) return res.status(404).json({ error: "曲が見つかりません" });
+    if (track._count.translations > 0) {
+      return res.status(409).json({ error: "この曲には既に歌詞データがあります" });
+    }
+    if (retryingTrackIds.has(trackId)) {
+      return res.status(409).json({ error: "この曲は取得処理中です" });
+    }
+
+    retryingTrackIds.add(trackId);
+    try {
+      const lyrics = await getLyrics(track.album.artistName, track.title, GENIUS_ACCESS_TOKEN);
+      const { success } = await translateAndSaveTrack({
+        createdTrack: track,
+        lyrics,
+        artistName: track.album.artistName,
+        trackTitle: track.title,
+      });
+
+      if (!success) {
+        return res.status(404).json({ error: "歌詞を取得できませんでした。しばらくしてからもう一度お試しください" });
+      }
+
+      if (VERCEL_REVALIDATE_URL) {
+        for (const path of [`/tracks/${trackId}`, `/albums/${track.albumId}`]) {
+          await fetch(VERCEL_REVALIDATE_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${VERCEL_REVALIDATE_SECRET}`,
+            },
+            body: JSON.stringify({ path }),
+          }).catch(() => {});
+        }
+      }
+      res.json({ ok: true });
+    } finally {
+      retryingTrackIds.delete(trackId);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
