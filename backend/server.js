@@ -798,8 +798,14 @@ app.post("/api/dictation/explain", async (req, res) => {
     if (!resultLine) {
       return res.status(404).json({ error: "対象の行が見つかりません" });
     }
-    if (resultLine.explanation) {
-      return res.json({ explanation: resultLine.explanation, costUsd: 0, cached: true });
+    // 文法判定が追加される前に解説済みの行（grammar なし）は、再生成して文法判定を補う
+    if (resultLine.explanation && resultLine.grammar) {
+      return res.json({
+        explanation: resultLine.explanation,
+        grammar: resultLine.grammar,
+        costUsd: 0,
+        cached: true,
+      });
     }
 
     const mistakes = resultLine.items.filter((i) => i.status !== "match");
@@ -817,7 +823,7 @@ app.post("/api/dictation/explain", async (req, res) => {
       return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
     }
 
-    const { explanation, costUsd } = await explainDictationMistake(
+    const { explanation, grammar, costUsd } = await explainDictationMistake(
       {
         lineOriginal: line.original,
         lineTranslation: line.translation,
@@ -827,12 +833,13 @@ app.post("/api/dictation/explain", async (req, res) => {
     );
 
     resultLine.explanation = explanation;
+    resultLine.grammar = grammar;
     await prisma.dictationAttempt.update({
       where: { id: attempt.id },
       data: { result },
     });
 
-    res.json({ explanation, costUsd, cached: false });
+    res.json({ explanation, grammar, costUsd, cached: false });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

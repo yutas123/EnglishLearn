@@ -4,6 +4,9 @@ import { sleep, calcCostUsd } from "./translator.js";
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 60000;
 
+/** 文法面の判定：直せた / 文法では決められない / 歌詞が標準文法を崩している */
+export const GRAMMAR_LEVELS = ["fixable", "undecidable", "nonstandard"];
+
 /** 自己申告の「聞き取れなかった」記号（?? や ？？ など） */
 const GAP_RE = /^[?？]+$/;
 
@@ -252,7 +255,7 @@ export function evaluateDictation(refLines, userText) {
  * 実際の音源は聴いていないので、歌唱時に一般的に起きやすい音声変化としての推測であることを明示させる。
  * @param {{ lineOriginal: string, lineTranslation: string, mistakes: { ref: string, user: string|null, status: string }[] }} input
  * @param {string} apiKey
- * @returns {{ explanation: string, costUsd: number }}
+ * @returns {{ explanation: string, grammar: { word: string, level: string, note: string }[], costUsd: number }}
  */
 export async function explainDictationMistake(
   { lineOriginal, lineTranslation, mistakes },
@@ -286,14 +289,24 @@ export async function explainDictationMistake(
 間違えた語:
 ${mistakeText}
 
-なぜそう聞こえた／書いてしまったのかを、日本語で解説してください。
+次の2つを日本語で出力してください。
+
+1. sound: なぜそう聞こえた／書いてしまったのかの解説
 - 聞き違い・聞き取れなかった語は、歌唱時に一般的に起こりやすい音声変化（連結、脱落、同化、弱形化など）をカタカナ等で示して説明する
-- 綴りミスは正しい綴りと覚え方のコツ、語形のずれは文法上のポイントを説明する
-あなたは実際の音源を聴いていないため、「このアーティストはこう歌っている」と断定せず、「歌唱時にはこう聞こえやすい」という一般的な傾向として説明してください。
-全体で150〜220文字程度で簡潔にまとめてください。
+- 綴りミスは正しい綴りと覚え方のコツを説明する
+- あなたは実際の音源を聴いていないため、「このアーティストはこう歌っている」と断定せず、「歌唱時にはこう聞こえやすい」という一般的な傾向として説明する
+- 100〜160文字程度で簡潔に
+
+2. grammar: 間違えた語ごとの文法面の判定（綴りミスの語は含めない）
+各語について、学習者が文法の知識から正解にたどり着けたかを次の3段階で判定する。
+- "fixable"（文法で直せた）: 主語と動詞の一致、時制、be動詞、助動詞、冠詞、前置詞などの標準的な文法から、正解を推測できた
+- "undecidable"（文法では決められない）: 語彙や音の問題で、文法は手がかりにならない
+- "nonstandard"（歌詞が崩している）: 口語・省略・倒置・ain't・二重否定など、歌詞があえて標準文法から外れている
+note は、その語の品詞や文中の役割（主語・目的語・補語・助動詞・前置詞・修飾語・冠詞など）に触れる1文（50文字以内）にする。文法規則の長い説明や例文は書かない。
+"nonstandard" の場合は、どう崩れているかを note に明記する。
 
 以下のJSON形式で出力してください：
-{"explanation": "解説文"}`;
+{"sound": "音の解説文", "grammar": [{"word": "正解の語", "level": "fixable|undecidable|nonstandard", "note": "文法メモ"}]}`;
 
   let lastError;
 
@@ -317,11 +330,19 @@ ${mistakeText}
       const parsed = JSON.parse(content);
       const costUsd = calcCostUsd(response.usage);
 
-      if (!parsed.explanation) {
+      if (!parsed.sound) {
         throw new Error(`予期しないレスポンス形式: ${content.substring(0, 200)}`);
       }
 
-      return { explanation: String(parsed.explanation).trim(), costUsd };
+      const grammar = (Array.isArray(parsed.grammar) ? parsed.grammar : [])
+        .filter((g) => g && GRAMMAR_LEVELS.includes(g.level) && g.word)
+        .map((g) => ({
+          word: String(g.word).trim(),
+          level: g.level,
+          note: String(g.note ?? "").trim(),
+        }));
+
+      return { explanation: String(parsed.sound).trim(), grammar, costUsd };
     } catch (error) {
       lastError = error;
       const isTimeout = error.code === "ETIMEDOUT" || error.message.includes("timeout");

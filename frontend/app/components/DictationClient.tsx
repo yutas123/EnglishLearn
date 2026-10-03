@@ -13,12 +13,17 @@ type Item = {
   extrasAfter: string[];
 };
 
+type GrammarLevel = "fixable" | "undecidable" | "nonstandard";
+
+type GrammarNote = { word: string; level: GrammarLevel; note: string };
+
 type ResultLine = {
   lineIndex: number;
   skipped: boolean;
   items: Item[];
   leadingExtras?: string[];
   explanation?: string;
+  grammar?: GrammarNote[]; // 文法追加前に解説済みの行では undefined
 };
 
 type Result = {
@@ -71,6 +76,26 @@ const STATUS_META: Record<Exclude<Status, "match">, { label: string; word: strin
   },
 };
 
+const GRAMMAR_LEVELS: GrammarLevel[] = ["fixable", "undecidable", "nonstandard"];
+
+const GRAMMAR_META: Record<GrammarLevel, { label: string; badge: string; hint: string }> = {
+  fixable: {
+    label: "文法で直せた",
+    badge: "bg-emerald-100 text-emerald-800",
+    hint: "標準的な文法から正解を推測できた",
+  },
+  undecidable: {
+    label: "文法では決められない",
+    badge: "bg-zinc-100 text-zinc-700",
+    hint: "語彙や音の問題で、文法は手がかりにならない",
+  },
+  nonstandard: {
+    label: "歌詞が崩している",
+    badge: "bg-orange-100 text-orange-800",
+    hint: "口語・省略・倒置など、歌詞があえて標準文法から外れている",
+  },
+};
+
 const MISTAKE_STATUSES = ["misheard", "missing", "spelling", "form"] as const;
 
 function percent(n: number) {
@@ -104,6 +129,18 @@ function accuracyOnLines(result: Result, lineIndexes: number[]): number | null {
 
 function lineHasMistake(line: ResultLine) {
   return !line.skipped && line.items.some((i) => i.status !== "match");
+}
+
+/** 文法判定の語数を段階別に数える（解説済みの行だけが対象） */
+function countGrammar(result: Result) {
+  const counts: Record<GrammarLevel, number> = { fixable: 0, undecidable: 0, nonstandard: 0 };
+  let explainedLines = 0;
+  for (const line of result.lines) {
+    if (line.skipped || !line.grammar) continue;
+    explainedLines += 1;
+    for (const g of line.grammar) counts[g.level] += 1;
+  }
+  return { counts, explainedLines };
 }
 
 export default function DictationClient({
@@ -234,7 +271,9 @@ export default function DictationClient({
                 result: {
                   ...a.result,
                   lines: a.result.lines.map((l) =>
-                    l.lineIndex === lineIndex ? { ...l, explanation: data.explanation } : l
+                    l.lineIndex === lineIndex
+                      ? { ...l, explanation: data.explanation, grammar: data.grammar ?? [] }
+                      : l
                   ),
                 },
               }
@@ -251,6 +290,15 @@ export default function DictationClient({
         next.delete(key);
         return next;
       });
+    }
+  }
+
+  async function explainAll(attempt: Attempt) {
+    const targets = attempt.result.lines
+      .filter((l) => lineHasMistake(l) && !l.grammar)
+      .map((l) => l.lineIndex);
+    for (const lineIndex of targets) {
+      await handleExplain(attempt, lineIndex);
     }
   }
 
@@ -337,6 +385,7 @@ export default function DictationClient({
           explaining={explaining}
           explainErrors={explainErrors}
           onExplain={(lineIndex) => handleExplain(selected, lineIndex)}
+          onExplainAll={() => explainAll(selected)}
           onRetry={() => startRetry(selected)}
         />
       )}
@@ -365,6 +414,14 @@ export default function DictationClient({
                   <span className="shrink-0 text-zinc-800">
                     {percent(a.accuracy)}
                     <span className="ml-2 text-xs text-zinc-500">?? {a.gapCount}</span>
+                    {countGrammar(a.result).explainedLines > 0 && (
+                      <span
+                        className="ml-2 text-xs text-emerald-700"
+                        title="文法で直せた語数（解説した行のみ）"
+                      >
+                        📐 {countGrammar(a.result).counts.fixable}
+                      </span>
+                    )}
                   </span>
                 </button>
               </li>
@@ -384,6 +441,7 @@ function ResultView({
   explaining,
   explainErrors,
   onExplain,
+  onExplainAll,
   onRetry,
 }: {
   attempt: Attempt;
@@ -393,6 +451,7 @@ function ResultView({
   explaining: Set<string>;
   explainErrors: Record<string, string>;
   onExplain: (lineIndex: number) => void;
+  onExplainAll: () => void;
   onRetry: () => void;
 }) {
   const { result } = attempt;
@@ -401,6 +460,9 @@ function ResultView({
   const skippedCount = result.lines.length - scoredLines.length;
   const mistakeLineCount = scoredLines.filter(lineHasMistake).length;
   const unnoticed = MISTAKE_STATUSES.reduce((sum, s) => sum + summary.counts[s], 0);
+  const grammarStats = countGrammar(result);
+  const unexplainedLines = scoredLines.filter((l) => lineHasMistake(l) && !l.grammar).length;
+  const anyExplaining = scoredLines.some((l) => explaining.has(`${attempt.id}:${l.lineIndex}`));
 
   // 前回との比較：自分より古い記録のうち、同じ範囲を採点しているもの
   const delta = useMemo(() => {
@@ -478,6 +540,25 @@ function ResultView({
         （聞き違い・脱落・綴り・語形の合計）。後者が多いほど、「聞こえたつもり」のズレが大きいことを示します。
       </p>
 
+      {grammarStats.explainedLines > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-2 text-xs">
+            {GRAMMAR_LEVELS.map((lv) => (
+              <span
+                key={lv}
+                title={GRAMMAR_META[lv].hint}
+                className={`rounded px-2 py-1 ${GRAMMAR_META[lv].badge}`}
+              >
+                {GRAMMAR_META[lv].label} {grammarStats.counts[lv]}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-400">
+            文法面の集計は、解説した {grammarStats.explainedLines} 行の間違い語が対象です。
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         {mistakeLineCount > 0 && (
           <button
@@ -485,6 +566,15 @@ function ResultView({
             className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
           >
             🔁 間違えた {mistakeLineCount} 行だけ再挑戦
+          </button>
+        )}
+        {unexplainedLines > 0 && (
+          <button
+            onClick={onExplainAll}
+            disabled={anyExplaining}
+            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50"
+          >
+            {anyExplaining ? "解説を生成中..." : `🗣️ 残り ${unexplainedLines} 行をまとめて解説`}
           </button>
         )}
         <label className="flex items-center gap-1.5 text-xs text-zinc-500">
@@ -540,17 +630,39 @@ function ResultView({
 
                 {hasMistake && (
                   <div className="ml-9 flex flex-col gap-1.5">
-                    {line.explanation ? (
+                    {line.explanation && (
                       <p className="break-words rounded bg-zinc-50 p-2 text-xs leading-relaxed text-zinc-600">
                         🗣️ {line.explanation}
                       </p>
-                    ) : (
+                    )}
+                    {line.grammar && line.grammar.length > 0 && (
+                      <ul className="flex flex-col gap-1 rounded bg-zinc-50 p-2 text-xs leading-relaxed text-zinc-600">
+                        {line.grammar.map((g, i) => (
+                          <li key={i} className="flex flex-wrap items-baseline gap-x-1.5">
+                            <span>📐</span>
+                            <span className="font-medium text-zinc-800">{g.word}</span>
+                            <span
+                              title={GRAMMAR_META[g.level].hint}
+                              className={`rounded px-1.5 py-0.5 text-[10px] ${GRAMMAR_META[g.level].badge}`}
+                            >
+                              {GRAMMAR_META[g.level].label}
+                            </span>
+                            <span className="break-words">{g.note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(!line.explanation || !line.grammar) && (
                       <button
                         onClick={() => onExplain(line.lineIndex)}
                         disabled={explaining.has(key)}
                         className="w-fit text-xs text-zinc-500 underline decoration-dotted hover:text-zinc-700 disabled:opacity-50"
                       >
-                        {explaining.has(key) ? "解説を生成中..." : "🗣️ 原因を解説"}
+                        {explaining.has(key)
+                          ? "解説を生成中..."
+                          : line.explanation
+                          ? "📐 文法も解説"
+                          : "🗣️ 原因を解説"}
                       </button>
                     )}
                     {explainErrors[key] && (
