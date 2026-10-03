@@ -13,7 +13,11 @@ import {
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
-import { evaluateDictation, explainDictationMistake } from "./src/dictation.js";
+import {
+  evaluateDictation,
+  evaluateDictationByLine,
+  explainDictationMistake,
+} from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
 import { translateAndSaveTrack } from "./src/jobs.js";
 import {
@@ -715,24 +719,15 @@ app.post("/api/listening/explain", async (req, res) => {
 
 /**
  * POST /api/dictation/attempts — 書き取りテキストを歌詞と照合して採点し、結果を保存する
- * body: { trackId, text, lineIndexes?: number[] }  lineIndexes を指定すると、その行だけを対象に採点する（再挑戦用）
+ * body は次のいずれか:
+ *  - { trackId, text }                      曲全体を通して書いたテキストを採点する
+ *  - { trackId, lineTexts: [{lineIndex, text}] }  行ごとに入力されたテキストを、対応する行とだけ照合する（再挑戦用）
  */
 app.post("/api/dictation/attempts", async (req, res) => {
   try {
-    const { trackId, text, lineIndexes } = req.body;
-    if (!trackId || typeof text !== "string" || !text.trim()) {
-      return res.status(400).json({ error: "trackId / text は必須です" });
-    }
-    if (text.length > 20000) {
-      return res.status(400).json({ error: "テキストが長すぎます" });
-    }
-    if (
-      lineIndexes !== undefined &&
-      (!Array.isArray(lineIndexes) ||
-        lineIndexes.length === 0 ||
-        !lineIndexes.every((n) => Number.isInteger(n)))
-    ) {
-      return res.status(400).json({ error: "lineIndexes が不正です" });
+    const { trackId, text, lineTexts } = req.body;
+    if (!trackId) {
+      return res.status(400).json({ error: "trackId は必須です" });
     }
 
     const allLines = await prisma.translation.findMany({
@@ -744,18 +739,51 @@ app.post("/api/dictation/attempts", async (req, res) => {
       return res.status(404).json({ error: "この曲の歌詞データがありません" });
     }
 
-    const scope = lineIndexes ? new Set(lineIndexes) : null;
-    const refLines = scope ? allLines.filter((l) => scope.has(l.lineIndex)) : allLines;
-    if (refLines.length === 0) {
-      return res.status(400).json({ error: "対象の行が見つかりません" });
+    let result;
+    let savedText;
+    let scopeLines;
+
+    if (lineTexts !== undefined) {
+      if (
+        !Array.isArray(lineTexts) ||
+        !lineTexts.every(
+          (e) => e && Number.isInteger(e.lineIndex) && typeof e.text === "string"
+        )
+      ) {
+        return res.status(400).json({ error: "lineTexts が不正です" });
+      }
+      const originalByIndex = new Map(allLines.map((l) => [l.lineIndex, l.original]));
+      // 入力が空の行は「挑戦しなかった行」として対象から外す
+      const entries = lineTexts
+        .filter((e) => e.text.trim() && originalByIndex.has(e.lineIndex))
+        .map((e) => ({
+          lineIndex: e.lineIndex,
+          original: originalByIndex.get(e.lineIndex),
+          text: e.text.slice(0, 2000),
+        }))
+        .sort((a, b) => a.lineIndex - b.lineIndex);
+      if (entries.length === 0) {
+        return res.status(400).json({ error: "入力された行がありません" });
+      }
+      result = evaluateDictationByLine(entries);
+      savedText = entries.map((e) => e.text).join("\n");
+      scopeLines = entries.map((e) => e.lineIndex);
+    } else {
+      if (typeof text !== "string" || !text.trim()) {
+        return res.status(400).json({ error: "text は必須です" });
+      }
+      if (text.length > 20000) {
+        return res.status(400).json({ error: "テキストが長すぎます" });
+      }
+      result = evaluateDictation(allLines, text);
+      savedText = text;
     }
 
-    const result = evaluateDictation(refLines, text);
     const attempt = await prisma.dictationAttempt.create({
       data: {
         trackId,
-        text,
-        scopeLines: scope ? refLines.map((l) => l.lineIndex) : undefined,
+        text: savedText,
+        scopeLines,
         accuracy: result.summary.accuracy,
         totalWords: result.summary.total,
         gapCount: result.summary.gapMarks,

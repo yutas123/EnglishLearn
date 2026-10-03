@@ -154,13 +154,16 @@ export default function DictationClient({
   const [attempts, setAttempts] = useState<Attempt[]>(initialAttempts);
   const [selectedId, setSelectedId] = useState<string | null>(initialAttempts[0]?.id ?? null);
   const [text, setText] = useState("");
-  const [scope, setScope] = useState<number[] | null>(null);
+  // 再挑戦中の元になっている記録（null なら通常の入力）と、行ごとの入力内容
+  const [retryBaseId, setRetryBaseId] = useState<string | null>(null);
+  const [lineInputs, setLineInputs] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [onlyMistakes, setOnlyMistakes] = useState(false);
   const [explaining, setExplaining] = useState<Set<string>>(new Set());
   const [explainErrors, setExplainErrors] = useState<Record<string, string>>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const retryPanelRef = useRef<HTMLDivElement>(null);
 
   // 書きかけの下書きはこのブラウザにだけ保持する（消えても困らない便宜機能）
   useEffect(() => {
@@ -183,18 +186,8 @@ export default function DictationClient({
 
   const selected = attempts.find((a) => a.id === selectedId) ?? null;
 
-  // 再挑戦時に「どのあたりの行か」を示す手がかり（直前の行は前回の答え合わせで既に見ている）
-  const scopeAnchors = useMemo(() => {
-    if (!scope || !selected) return [];
-    return scope.map((lineIndex) => {
-      const prev = selected.result.lines.find((l) => l.lineIndex === lineIndex - 1);
-      return {
-        lineIndex,
-        prevText: prev && !prev.skipped ? prev.items.map((i) => i.ref).join(" ") : null,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
+  const retryBase = attempts.find((a) => a.id === retryBaseId) ?? null;
+  const retryFilledCount = Object.values(lineInputs).filter((v) => v.trim()).length;
 
   function insertGapMark() {
     const el = textareaRef.current;
@@ -212,22 +205,37 @@ export default function DictationClient({
   }
 
   async function handleSubmit() {
-    if (!BACKEND_URL || submitting || !text.trim()) return;
+    const isRetry = retryBase !== null;
+    if (!BACKEND_URL || submitting) return;
+    if (isRetry ? retryFilledCount === 0 : !text.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
+      const body = isRetry
+        ? {
+            trackId,
+            lineTexts: Object.entries(lineInputs).map(([lineIndex, lineText]) => ({
+              lineIndex: Number(lineIndex),
+              text: lineText,
+            })),
+          }
+        : { trackId, text };
       const res = await fetch(`${BACKEND_URL}/api/dictation/attempts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackId, text, lineIndexes: scope ?? undefined }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "答え合わせに失敗しました");
       const attempt: Attempt = { ...data, scopeLines: data.scopeLines ?? null };
       setAttempts((prev) => [attempt, ...prev]);
       setSelectedId(attempt.id);
-      setText("");
-      setScope(null);
+      if (isRetry) {
+        setRetryBaseId(null);
+        setLineInputs({});
+      } else {
+        setText("");
+      }
       setOnlyMistakes(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
@@ -237,12 +245,13 @@ export default function DictationClient({
   }
 
   function startRetry(attempt: Attempt) {
-    const lines = attempt.result.lines.filter(lineHasMistake).map((l) => l.lineIndex);
-    if (lines.length === 0) return;
-    setScope(lines);
-    setText("");
-    textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    textareaRef.current?.focus();
+    if (!attempt.result.lines.some(lineHasMistake)) return;
+    setRetryBaseId(attempt.id);
+    setLineInputs({});
+    setError(null);
+    requestAnimationFrame(() =>
+      retryPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
   }
 
   async function handleExplain(attempt: Attempt, lineIndex: number) {
@@ -305,75 +314,122 @@ export default function DictationClient({
   return (
     <div className="flex flex-col gap-8">
       {/* 入力 */}
-      <section className="flex flex-col gap-2">
-        <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
-          Spotifyで曲を聴きながら、聞こえた英語を書いてください。行の区切りは歌詞と合っていなくて構いません。
-          聞き取れない箇所は <code className="rounded bg-zinc-200 px-1">??</code>{" "}
-          と書いておくと、「自分で気づいていた聞き取れなさ」として記録されます。
-        </p>
-
-        {scope && (
+      {retryBase ? (
+        <section ref={retryPanelRef} className="flex flex-col gap-3">
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
             <div className="flex items-start justify-between gap-2">
               <p className="font-medium">
-                間違えた {scope.length} 行だけを再挑戦中です。その行だけを書いてください。
+                再挑戦：前回の全文です。入力欄になっている行を聴き直して書いてください。
+                書かなかった行は採点されません。
               </p>
               <button
-                onClick={() => setScope(null)}
+                onClick={() => {
+                  setRetryBaseId(null);
+                  setLineInputs({});
+                }}
                 className="shrink-0 underline decoration-dotted"
               >
-                全体に戻す
+                やめる
               </button>
             </div>
-            <ul className="mt-1.5 flex flex-col gap-0.5">
-              {scopeAnchors.map((a) => (
-                <li key={a.lineIndex} className="break-words">
-                  {a.lineIndex + 1}行目
-                  {a.prevText ? `（直前の行: “${a.prevText}”）` : ""}
-                </li>
-              ))}
-            </ul>
           </div>
-        )}
 
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={10}
-          placeholder="聞こえた英語をここに書く…"
-          className="w-full rounded-lg border border-zinc-300 p-3 text-base leading-relaxed focus:border-zinc-500 focus:outline-none"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-        />
+          <div className="flex flex-col">
+            {retryBase.result.lines
+              .filter((line) => !line.skipped)
+              .map((line) => {
+                if (!lineHasMistake(line)) {
+                  return (
+                    <div key={line.lineIndex} className="flex gap-2 py-1.5">
+                      <span className="w-7 shrink-0 pt-0.5 text-right text-[10px] text-zinc-400">
+                        {line.lineIndex + 1}
+                      </span>
+                      <p className="min-w-0 break-words text-sm leading-relaxed text-zinc-500">
+                        {line.items.map((i) => i.ref).join(" ")}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={line.lineIndex} className="flex gap-2 py-1.5">
+                    <span className="w-7 shrink-0 pt-2.5 text-right text-[10px] text-amber-600">
+                      {line.lineIndex + 1}
+                    </span>
+                    <textarea
+                      value={lineInputs[line.lineIndex] ?? ""}
+                      onChange={(e) =>
+                        setLineInputs((prev) => ({ ...prev, [line.lineIndex]: e.target.value }))
+                      }
+                      rows={2}
+                      placeholder="この行を聴いて書く（聞き取れない所は ??）"
+                      className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white p-2 text-base leading-relaxed focus:border-amber-500 focus:outline-none"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                    />
+                  </div>
+                );
+              })}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !text.trim()}
-            className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {submitting ? "採点中..." : "答え合わせ"}
-          </button>
-          <button
-            onClick={insertGapMark}
-            className="rounded-full border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50"
-            title="カーソル位置に「??」を挿入"
-          >
-            ?? を挿入
-          </button>
-          {text && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setText("")}
-              className="text-xs text-zinc-500 underline decoration-dotted"
+              onClick={handleSubmit}
+              disabled={submitting || retryFilledCount === 0}
+              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              クリア
+              {submitting ? "採点中..." : `答え合わせ（${retryFilledCount}行）`}
             </button>
-          )}
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-      </section>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </section>
+      ) : (
+        <section className="flex flex-col gap-2">
+          <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
+            Spotifyで曲を聴きながら、聞こえた英語を書いてください。行の区切りは歌詞と合っていなくて構いません。
+            聞き取れない箇所は <code className="rounded bg-zinc-200 px-1">??</code>{" "}
+            と書いておくと、「自分で気づいていた聞き取れなさ」として記録されます。
+          </p>
+
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={10}
+            placeholder="聞こえた英語をここに書く…"
+            className="w-full rounded-lg border border-zinc-300 p-3 text-base leading-relaxed focus:border-zinc-500 focus:outline-none"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !text.trim()}
+              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {submitting ? "採点中..." : "答え合わせ"}
+            </button>
+            <button
+              onClick={insertGapMark}
+              className="rounded-full border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50"
+              title="カーソル位置に「??」を挿入"
+            >
+              ?? を挿入
+            </button>
+            {text && (
+              <button
+                onClick={() => setText("")}
+                className="text-xs text-zinc-500 underline decoration-dotted"
+              >
+                クリア
+              </button>
+            )}
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </section>
+      )}
 
       {/* 結果 */}
       {selected && (

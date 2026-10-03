@@ -251,6 +251,36 @@ export function evaluateDictation(refLines, userText) {
 }
 
 /**
+ * 行ごとに入力された書き取りを、それぞれ対応する歌詞の1行とだけ照合して採点する（再挑戦用）。
+ * 行と入力の対応が分かっているので、全体を通した書き取りと違い、行をまたぐ対応づけのずれは起きない。
+ * 入力が空の行は呼び出し側で除外しておくこと。
+ *
+ * @param {{ lineIndex: number, original: string, text: string }[]} entries
+ */
+export function evaluateDictationByLine(entries) {
+  const lines = [];
+  const counts = { match: 0, misheard: 0, missing: 0, spelling: 0, form: 0, gap: 0 };
+  let total = 0;
+  let extra = 0;
+  let gapMarks = 0;
+
+  for (const entry of entries) {
+    const { lines: evaluated, summary } = evaluateDictation(
+      [{ lineIndex: entry.lineIndex, original: entry.original }],
+      entry.text
+    );
+    lines.push(...evaluated);
+    for (const key of Object.keys(counts)) counts[key] += summary.counts[key];
+    total += summary.total;
+    extra += summary.extra;
+    gapMarks += summary.gapMarks;
+  }
+
+  const accuracy = total > 0 ? counts.match / total : 0;
+  return { lines, summary: { total, counts, extra, gapMarks, accuracy } };
+}
+
+/**
  * 書き取りで間違えた行について、聞き違いの原因を日本語で解説する。
  * 実際の音源は聴いていないので、歌唱時に一般的に起きやすい音声変化としての推測であることを明示させる。
  * @param {{ lineOriginal: string, lineTranslation: string, mistakes: { ref: string, user: string|null, status: string }[] }} input
