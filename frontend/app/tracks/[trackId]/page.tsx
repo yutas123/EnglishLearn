@@ -92,6 +92,14 @@ export default async function TrackPage({
           >
             👂
           </Link>
+          <Link
+            href={`/tracks/${track.id}/dictation`}
+            aria-label="書き取りモード"
+            title="書き取りモード（聞こえた英語を書いて答え合わせ）"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-base hover:bg-zinc-50"
+          >
+            ✍️
+          </Link>
         </div>
       </header>
 

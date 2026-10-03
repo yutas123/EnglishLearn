@@ -13,6 +13,7 @@ import {
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
+import { evaluateDictation, explainDictationMistake } from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
 import { translateAndSaveTrack } from "./src/jobs.js";
 import {
@@ -713,7 +714,132 @@ app.post("/api/listening/explain", async (req, res) => {
 });
 
 /**
- * GET /api/spotify/now-playing-match — 今Spotifyで流れている曲が、このアプリのDBに存在するか照合する
+ * POST /api/dictation/attempts — 書き取りテキストを歌詞と照合して採点し、結果を保存する
+ * body: { trackId, text, lineIndexes?: number[] }  lineIndexes を指定すると、その行だけを対象に採点する（再挑戦用）
+ */
+app.post("/api/dictation/attempts", async (req, res) => {
+  try {
+    const { trackId, text, lineIndexes } = req.body;
+    if (!trackId || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "trackId / text は必須です" });
+    }
+    if (text.length > 20000) {
+      return res.status(400).json({ error: "テキストが長すぎます" });
+    }
+    if (
+      lineIndexes !== undefined &&
+      (!Array.isArray(lineIndexes) ||
+        lineIndexes.length === 0 ||
+        !lineIndexes.every((n) => Number.isInteger(n)))
+    ) {
+      return res.status(400).json({ error: "lineIndexes が不正です" });
+    }
+
+    const allLines = await prisma.translation.findMany({
+      where: { trackId },
+      orderBy: { lineIndex: "asc" },
+      select: { lineIndex: true, original: true },
+    });
+    if (allLines.length === 0) {
+      return res.status(404).json({ error: "この曲の歌詞データがありません" });
+    }
+
+    const scope = lineIndexes ? new Set(lineIndexes) : null;
+    const refLines = scope ? allLines.filter((l) => scope.has(l.lineIndex)) : allLines;
+    if (refLines.length === 0) {
+      return res.status(400).json({ error: "対象の行が見つかりません" });
+    }
+
+    const result = evaluateDictation(refLines, text);
+    const attempt = await prisma.dictationAttempt.create({
+      data: {
+        trackId,
+        text,
+        scopeLines: scope ? refLines.map((l) => l.lineIndex) : undefined,
+        accuracy: result.summary.accuracy,
+        totalWords: result.summary.total,
+        gapCount: result.summary.gapMarks,
+        result,
+      },
+    });
+
+    res.json({
+      id: attempt.id,
+      createdAt: attempt.createdAt,
+      text: attempt.text,
+      scopeLines: attempt.scopeLines,
+      accuracy: attempt.accuracy,
+      totalWords: attempt.totalWords,
+      gapCount: attempt.gapCount,
+      result,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/dictation/explain — 書き取りで間違えた行について、原因をAIで解説する（結果は試行の result に保存）
+ * body: { attemptId, lineIndex }
+ */
+app.post("/api/dictation/explain", async (req, res) => {
+  try {
+    const { attemptId, lineIndex } = req.body;
+    if (!attemptId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "attemptId / lineIndex は必須です" });
+    }
+
+    const attempt = await prisma.dictationAttempt.findUnique({ where: { id: attemptId } });
+    if (!attempt) {
+      return res.status(404).json({ error: "書き取りの記録が見つかりません" });
+    }
+    const result = attempt.result;
+    const resultLine = result.lines.find((l) => l.lineIndex === lineIndex);
+    if (!resultLine) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+    if (resultLine.explanation) {
+      return res.json({ explanation: resultLine.explanation, costUsd: 0, cached: true });
+    }
+
+    const mistakes = resultLine.items.filter((i) => i.status !== "match");
+    if (mistakes.length === 0) {
+      return res.status(400).json({ error: "この行に間違いはありません" });
+    }
+
+    const line = await prisma.translation.findFirst({
+      where: { trackId: attempt.trackId, lineIndex },
+    });
+    if (!line) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { explanation, costUsd } = await explainDictationMistake(
+      {
+        lineOriginal: line.original,
+        lineTranslation: line.translation,
+        mistakes: mistakes.map(({ ref, user, status }) => ({ ref, user, status })),
+      },
+      OPENAI_API_KEY
+    );
+
+    resultLine.explanation = explanation;
+    await prisma.dictationAttempt.update({
+      where: { id: attempt.id },
+      data: { result },
+    });
+
+    res.json({ explanation, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/spotify/now-playing-match —今Spotifyで流れている曲が、このアプリのDBに存在するか照合する
  * （右下固定ボタン用。存在すればそのtrackIdと表示用情報を返す）
  */
 app.get("/api/spotify/now-playing-match", async (_req, res) => {
