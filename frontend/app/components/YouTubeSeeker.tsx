@@ -188,11 +188,11 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
     else p.playVideo();
   }, []);
 
-  // Alt + ←/→/↓ で操作する。矢印キー単体は入力欄のカーソル移動に使われるため、修飾キーを付ける
+  // Ctrl + ←/→/↓ で操作する。矢印キー単体は入力欄のカーソル移動に使われるため、修飾キーを付ける（Ctrl+矢印の「単語単位の移動」は、動画を設定している間だけ使えなくなる）
   useEffect(() => {
     if (!videoId) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
+      if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.isComposing) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         seek(-SEEK_SECONDS);
@@ -243,10 +243,10 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
         <div className="flex flex-col gap-1.5">
           <p className="text-xs leading-relaxed text-zinc-500">
             YouTubeのURLを入れると、この画面の中で再生できます。入力欄で文字を打ちながら、
-            <kbd className="rounded bg-zinc-100 px-1">Alt</kbd> + <kbd className="rounded bg-zinc-100 px-1">←</kbd>
-            で{SEEK_SECONDS}秒戻し、<kbd className="rounded bg-zinc-100 px-1">Alt</kbd> +{" "}
+            <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> + <kbd className="rounded bg-zinc-100 px-1">←</kbd>
+            で{SEEK_SECONDS}秒戻し、<kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> +{" "}
             <kbd className="rounded bg-zinc-100 px-1">→</kbd> で{SEEK_SECONDS}秒送り、
-            <kbd className="rounded bg-zinc-100 px-1">Alt</kbd> + <kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
+            <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> + <kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
             で再生/停止ができます。
           </p>
           <div className="flex gap-2">
@@ -304,9 +304,9 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
                 </button>
               </div>
               <p className="text-[11px] leading-relaxed text-zinc-500">
-                入力欄で <kbd className="rounded bg-zinc-100 px-1">Alt</kbd>+<kbd className="rounded bg-zinc-100 px-1">←</kbd>{" "}
-                戻す / <kbd className="rounded bg-zinc-100 px-1">Alt</kbd>+<kbd className="rounded bg-zinc-100 px-1">→</kbd>{" "}
-                送る / <kbd className="rounded bg-zinc-100 px-1">Alt</kbd>+<kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
+                入力欄で <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">←</kbd>{" "}
+                戻す / <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">→</kbd>{" "}
+                送る / <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
                 再生・停止
               </p>
               <button

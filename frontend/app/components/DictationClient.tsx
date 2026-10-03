@@ -363,7 +363,7 @@ export default function DictationClient({
 
   return (
     <div className="flex flex-col gap-8">
-      {/* YouTube再生（Alt+矢印キーで入力欄から5秒戻し・送り） */}
+      {/* YouTube再生（Ctrl+矢印キーで入力欄から5秒戻し・送り） */}
       <YouTubeSeeker trackId={trackId} />
 
       {/* 入力 */}
