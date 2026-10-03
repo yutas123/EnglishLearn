@@ -15,7 +15,7 @@ import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
 import {
   evaluateDictation,
-  evaluateDictationByLine,
+  evaluateDictationGroups,
   explainDictationMistake,
 } from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
@@ -721,11 +721,12 @@ app.post("/api/listening/explain", async (req, res) => {
  * POST /api/dictation/attempts — 書き取りテキストを歌詞と照合して採点し、結果を保存する
  * body は次のいずれか:
  *  - { trackId, text }                      曲全体を通して書いたテキストを採点する
- *  - { trackId, lineTexts: [{lineIndex, text}] }  行ごとに入力されたテキストを、対応する行とだけ照合する（再挑戦用）
+ *  - { trackId, groups: [{lineIndexes, text}] }  連続した数行の区間ごとに入力されたテキストを、
+ *                                               対応する区間とだけ照合する（再挑戦用）。旧形式の lineTexts も受け付ける
  */
 app.post("/api/dictation/attempts", async (req, res) => {
   try {
-    const { trackId, text, lineTexts } = req.body;
+    const { trackId, text, groups, lineTexts } = req.body;
     if (!trackId) {
       return res.status(400).json({ error: "trackId は必須です" });
     }
@@ -743,31 +744,45 @@ app.post("/api/dictation/attempts", async (req, res) => {
     let savedText;
     let scopeLines;
 
-    if (lineTexts !== undefined) {
+    if (groups !== undefined || lineTexts !== undefined) {
+      // 旧形式 lineTexts（1行ずつの入力）は、1行だけの区間として扱う
+      const rawGroups =
+        groups ??
+        (Array.isArray(lineTexts)
+          ? lineTexts.map((e) => ({ lineIndexes: [e?.lineIndex], text: e?.text }))
+          : null);
       if (
-        !Array.isArray(lineTexts) ||
-        !lineTexts.every(
-          (e) => e && Number.isInteger(e.lineIndex) && typeof e.text === "string"
+        !Array.isArray(rawGroups) ||
+        !rawGroups.every(
+          (g) =>
+            g &&
+            typeof g.text === "string" &&
+            Array.isArray(g.lineIndexes) &&
+            g.lineIndexes.length > 0 &&
+            g.lineIndexes.every((n) => Number.isInteger(n))
         )
       ) {
-        return res.status(400).json({ error: "lineTexts が不正です" });
+        return res.status(400).json({ error: "groups が不正です" });
       }
       const originalByIndex = new Map(allLines.map((l) => [l.lineIndex, l.original]));
-      // 入力が空の行は「挑戦しなかった行」として対象から外す
-      const entries = lineTexts
-        .filter((e) => e.text.trim() && originalByIndex.has(e.lineIndex))
-        .map((e) => ({
-          lineIndex: e.lineIndex,
-          original: originalByIndex.get(e.lineIndex),
-          text: e.text.slice(0, 2000),
+      // 入力が空の区間は「挑戦しなかった区間」として対象から外す
+      const evaluatedGroups = rawGroups
+        .filter((g) => g.text.trim())
+        .map((g) => ({
+          lines: [...new Set(g.lineIndexes)]
+            .filter((n) => originalByIndex.has(n))
+            .sort((a, b) => a - b)
+            .map((n) => ({ lineIndex: n, original: originalByIndex.get(n) })),
+          text: g.text.slice(0, 5000),
         }))
-        .sort((a, b) => a.lineIndex - b.lineIndex);
-      if (entries.length === 0) {
+        .filter((g) => g.lines.length > 0)
+        .sort((a, b) => a.lines[0].lineIndex - b.lines[0].lineIndex);
+      if (evaluatedGroups.length === 0) {
         return res.status(400).json({ error: "入力された行がありません" });
       }
-      result = evaluateDictationByLine(entries);
-      savedText = entries.map((e) => e.text).join("\n");
-      scopeLines = entries.map((e) => e.lineIndex);
+      result = evaluateDictationGroups(evaluatedGroups);
+      savedText = evaluatedGroups.map((g) => g.text).join("\n");
+      scopeLines = evaluatedGroups.flatMap((g) => g.lines.map((l) => l.lineIndex));
     } else {
       if (typeof text !== "string" || !text.trim()) {
         return res.status(400).json({ error: "text は必須です" });

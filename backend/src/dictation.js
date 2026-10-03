@@ -251,24 +251,22 @@ export function evaluateDictation(refLines, userText) {
 }
 
 /**
- * 行ごとに入力された書き取りを、それぞれ対応する歌詞の1行とだけ照合して採点する（再挑戦用）。
- * 行と入力の対応が分かっているので、全体を通した書き取りと違い、行をまたぐ対応づけのずれは起きない。
- * 入力が空の行は呼び出し側で除外しておくこと。
+ * 区間（連続した数行のまとまり）ごとに入力された書き取りを、それぞれ対応する歌詞の区間とだけ照合して採点する（再挑戦用）。
+ * 区間と入力の対応が分かっているので、全体を通した書き取りと違い、区間をまたぐ対応づけのずれは起きない。
+ * 区間の中では行区切りを無視して単語列として対応づける（歌い手の息継ぎと歌詞の改行は一致しないため）。
+ * 入力が空の区間は呼び出し側で除外しておくこと。
  *
- * @param {{ lineIndex: number, original: string, text: string }[]} entries
+ * @param {{ lines: { lineIndex: number, original: string }[], text: string }[]} groups
  */
-export function evaluateDictationByLine(entries) {
+export function evaluateDictationGroups(groups) {
   const lines = [];
   const counts = { match: 0, misheard: 0, missing: 0, spelling: 0, form: 0, gap: 0 };
   let total = 0;
   let extra = 0;
   let gapMarks = 0;
 
-  for (const entry of entries) {
-    const { lines: evaluated, summary } = evaluateDictation(
-      [{ lineIndex: entry.lineIndex, original: entry.original }],
-      entry.text
-    );
+  for (const group of groups) {
+    const { lines: evaluated, summary } = evaluateDictation(group.lines, group.text);
     lines.push(...evaluated);
     for (const key of Object.keys(counts)) counts[key] += summary.counts[key];
     total += summary.total;

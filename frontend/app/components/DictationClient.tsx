@@ -131,6 +131,32 @@ function lineHasMistake(line: ResultLine) {
   return !line.skipped && line.items.some((i) => i.status !== "match");
 }
 
+type RetrySegment =
+  | { kind: "ok"; line: ResultLine }
+  | { kind: "group"; key: number; lines: ResultLine[] };
+
+/**
+ * 再挑戦の表示用に、前回の結果を「合っていた行」と「連続して間違えた行のまとまり」に分ける。
+ * 連続する間違い行は1つの入力欄にまとめる（歌い手の息継ぎと歌詞の改行は一致しないため、行ごとに分けると書きにくい）。
+ */
+function buildRetrySegments(result: Result): RetrySegment[] {
+  const segments: RetrySegment[] = [];
+  let prevLineIndex: number | null = null;
+  for (const line of result.lines) {
+    if (line.skipped) continue;
+    const last = segments[segments.length - 1];
+    if (!lineHasMistake(line)) {
+      segments.push({ kind: "ok", line });
+    } else if (last && last.kind === "group" && prevLineIndex === line.lineIndex - 1) {
+      last.lines.push(line);
+    } else {
+      segments.push({ kind: "group", key: line.lineIndex, lines: [line] });
+    }
+    prevLineIndex = line.lineIndex;
+  }
+  return segments;
+}
+
 /** 文法判定の語数を段階別に数える（解説済みの行だけが対象） */
 function countGrammar(result: Result) {
   const counts: Record<GrammarLevel, number> = { fixable: 0, undecidable: 0, nonstandard: 0 };
@@ -187,6 +213,10 @@ export default function DictationClient({
   const selected = attempts.find((a) => a.id === selectedId) ?? null;
 
   const retryBase = attempts.find((a) => a.id === retryBaseId) ?? null;
+  const retrySegments = useMemo(
+    () => (retryBase ? buildRetrySegments(retryBase.result) : []),
+    [retryBase]
+  );
   const retryFilledCount = Object.values(lineInputs).filter((v) => v.trim()).length;
 
   function insertGapMark() {
@@ -214,10 +244,11 @@ export default function DictationClient({
       const body = isRetry
         ? {
             trackId,
-            lineTexts: Object.entries(lineInputs).map(([lineIndex, lineText]) => ({
-              lineIndex: Number(lineIndex),
-              text: lineText,
-            })),
+            groups: retrySegments.flatMap((seg) =>
+              seg.kind === "group" && (lineInputs[seg.key] ?? "").trim()
+                ? [{ lineIndexes: seg.lines.map((l) => l.lineIndex), text: lineInputs[seg.key] }]
+                : []
+            ),
           }
         : { trackId, text };
       const res = await fetch(`${BACKEND_URL}/api/dictation/attempts`, {
@@ -319,8 +350,8 @@ export default function DictationClient({
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
             <div className="flex items-start justify-between gap-2">
               <p className="font-medium">
-                再挑戦：前回の全文です。入力欄になっている行を聴き直して書いてください。
-                書かなかった行は採点されません。
+                再挑戦：前回の全文です。枠で囲んだ範囲を聴き直して書いてください。
+                連続して間違えた行は1つの枠にまとめています。書かなかった枠は採点されません。
               </p>
               <button
                 onClick={() => {
@@ -335,41 +366,50 @@ export default function DictationClient({
           </div>
 
           <div className="flex flex-col">
-            {retryBase.result.lines
-              .filter((line) => !line.skipped)
-              .map((line) => {
-                if (!lineHasMistake(line)) {
-                  return (
-                    <div key={line.lineIndex} className="flex gap-2 py-1.5">
-                      <span className="w-7 shrink-0 pt-0.5 text-right text-[10px] text-zinc-400">
-                        {line.lineIndex + 1}
-                      </span>
-                      <p className="min-w-0 break-words text-sm leading-relaxed text-zinc-500">
-                        {line.items.map((i) => i.ref).join(" ")}
-                      </p>
-                    </div>
-                  );
-                }
+            {retrySegments.map((seg) => {
+              if (seg.kind === "ok") {
                 return (
-                  <div key={line.lineIndex} className="flex gap-2 py-1.5">
-                    <span className="w-7 shrink-0 pt-2.5 text-right text-[10px] text-amber-600">
-                      {line.lineIndex + 1}
+                  <div key={seg.line.lineIndex} className="flex gap-2 py-1.5">
+                    <span className="w-7 shrink-0 pt-0.5 text-right text-[10px] text-zinc-400">
+                      {seg.line.lineIndex + 1}
                     </span>
-                    <textarea
-                      value={lineInputs[line.lineIndex] ?? ""}
-                      onChange={(e) =>
-                        setLineInputs((prev) => ({ ...prev, [line.lineIndex]: e.target.value }))
-                      }
-                      rows={2}
-                      placeholder="この行を聴いて書く（聞き取れない所は ??）"
-                      className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white p-2 text-base leading-relaxed focus:border-amber-500 focus:outline-none"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                    />
+                    <p className="min-w-0 break-words text-sm leading-relaxed text-zinc-500">
+                      {seg.line.items.map((i) => i.ref).join(" ")}
+                    </p>
                   </div>
                 );
-              })}
+              }
+              const first = seg.lines[0].lineIndex + 1;
+              const last = seg.lines[seg.lines.length - 1].lineIndex + 1;
+              const rangeLabel = seg.lines.length === 1 ? `${first}行目` : `${first}〜${last}行目`;
+              return (
+                <div
+                  key={seg.key}
+                  className="my-1.5 flex flex-col gap-1 rounded-lg border border-amber-300 bg-amber-50/60 p-2"
+                >
+                  <p className="text-xs font-medium text-amber-800">
+                    ✍️ {rangeLabel}
+                    {seg.lines.length > 1 && `（${seg.lines.length}行ぶんを続けて書く）`}
+                  </p>
+                  <textarea
+                    value={lineInputs[seg.key] ?? ""}
+                    onChange={(e) =>
+                      setLineInputs((prev) => ({ ...prev, [seg.key]: e.target.value }))
+                    }
+                    rows={Math.max(2, seg.lines.length + 1)}
+                    placeholder={
+                      seg.lines.length > 1
+                        ? `この${seg.lines.length}行ぶんを続けて書く（行の区切りは気にしなくてOK・聞き取れない所は ??）`
+                        : "この行を聴いて書く（聞き取れない所は ??）"
+                    }
+                    className="w-full rounded-lg border border-amber-300 bg-white p-2 text-base leading-relaxed focus:border-amber-500 focus:outline-none"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -378,7 +418,7 @@ export default function DictationClient({
               disabled={submitting || retryFilledCount === 0}
               className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              {submitting ? "採点中..." : `答え合わせ（${retryFilledCount}行）`}
+              {submitting ? "採点中..." : `答え合わせ（${retryFilledCount}箇所）`}
             </button>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
