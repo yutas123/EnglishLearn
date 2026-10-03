@@ -132,27 +132,40 @@ function lineHasMistake(line: ResultLine) {
 }
 
 type RetrySegment =
-  | { kind: "ok"; line: ResultLine }
-  | { kind: "group"; key: number; lines: ResultLine[] };
+  | { kind: "ok"; lineIndex: number; text: string }
+  | { kind: "group"; key: number; lines: { lineIndex: number }[] }
+  | { kind: "gap" };
 
 /**
- * 再挑戦の表示用に、前回の結果を「合っていた行」と「連続して間違えた行のまとまり」に分ける。
- * 連続する間違い行は1つの入力欄にまとめる（歌い手の息継ぎと歌詞の改行は一致しないため、行ごとに分けると書きにくい）。
+ * 再挑戦の表示用に、歌詞の流れを「文脈として見せる行」と「連続して間違えた行のまとまり（入力枠）」に分ける。
+ * 文脈の行は、過去の答え合わせで一度でも表示された行をすべて集めたもの。再挑戦の結果には再挑戦した行しか
+ * 含まれないため、元にした記録だけでは入力枠の前後の歌詞が足りなくなる。
+ * 連続する間違い行は1つの入力枠にまとめる（歌い手の息継ぎと歌詞の改行は一致しないため、行ごとに分けると書きにくい）。
  */
-function buildRetrySegments(result: Result): RetrySegment[] {
+function buildRetrySegments(base: Result, attempts: Attempt[]): RetrySegment[] {
+  // attempts は新しい順。古い順にたどって、新しい記録の内容で上書きする
+  const revealed = new Map<number, string>();
+  for (const attempt of [...attempts].reverse()) {
+    for (const line of attempt.result.lines) {
+      if (!line.skipped) revealed.set(line.lineIndex, line.items.map((i) => i.ref).join(" "));
+    }
+  }
+
+  const mistaken = new Set(base.lines.filter(lineHasMistake).map((l) => l.lineIndex));
   const segments: RetrySegment[] = [];
   let prevLineIndex: number | null = null;
-  for (const line of result.lines) {
-    if (line.skipped) continue;
+  for (const lineIndex of [...revealed.keys()].sort((a, b) => a - b)) {
+    // まだ一度も答え合わせで見えていない行が間にあれば、省略の印を入れる
+    if (prevLineIndex !== null && lineIndex > prevLineIndex + 1) segments.push({ kind: "gap" });
     const last = segments[segments.length - 1];
-    if (!lineHasMistake(line)) {
-      segments.push({ kind: "ok", line });
-    } else if (last && last.kind === "group" && prevLineIndex === line.lineIndex - 1) {
-      last.lines.push(line);
+    if (!mistaken.has(lineIndex)) {
+      segments.push({ kind: "ok", lineIndex, text: revealed.get(lineIndex) ?? "" });
+    } else if (last && last.kind === "group" && prevLineIndex === lineIndex - 1) {
+      last.lines.push({ lineIndex });
     } else {
-      segments.push({ kind: "group", key: line.lineIndex, lines: [line] });
+      segments.push({ kind: "group", key: lineIndex, lines: [{ lineIndex }] });
     }
-    prevLineIndex = line.lineIndex;
+    prevLineIndex = lineIndex;
   }
   return segments;
 }
@@ -214,8 +227,8 @@ export default function DictationClient({
 
   const retryBase = attempts.find((a) => a.id === retryBaseId) ?? null;
   const retrySegments = useMemo(
-    () => (retryBase ? buildRetrySegments(retryBase.result) : []),
-    [retryBase]
+    () => (retryBase ? buildRetrySegments(retryBase.result, attempts) : []),
+    [retryBase, attempts]
   );
   const retryFilledCount = Object.values(lineInputs).filter((v) => v.trim()).length;
 
@@ -350,8 +363,8 @@ export default function DictationClient({
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
             <div className="flex items-start justify-between gap-2">
               <p className="font-medium">
-                再挑戦：前回の全文です。枠で囲んだ範囲を聴き直して書いてください。
-                連続して間違えた行は1つの枠にまとめています。書かなかった枠は採点されません。
+                再挑戦：これまでの答え合わせで見えた歌詞の流れです。枠で囲んだ範囲を、前後の行を手がかりに
+                聴き直して書いてください。連続して間違えた行は1つの枠にまとめています。書かなかった枠は採点されません。
               </p>
               <button
                 onClick={() => {
@@ -366,15 +379,22 @@ export default function DictationClient({
           </div>
 
           <div className="flex flex-col">
-            {retrySegments.map((seg) => {
+            {retrySegments.map((seg, i) => {
+              if (seg.kind === "gap") {
+                return (
+                  <div key={`gap-${i}`} className="py-0.5 pl-9 text-xs text-zinc-300">
+                    ⋯
+                  </div>
+                );
+              }
               if (seg.kind === "ok") {
                 return (
-                  <div key={seg.line.lineIndex} className="flex gap-2 py-1.5">
+                  <div key={seg.lineIndex} className="flex gap-2 py-1.5">
                     <span className="w-7 shrink-0 pt-0.5 text-right text-[10px] text-zinc-400">
-                      {seg.line.lineIndex + 1}
+                      {seg.lineIndex + 1}
                     </span>
                     <p className="min-w-0 break-words text-sm leading-relaxed text-zinc-500">
-                      {seg.line.items.map((i) => i.ref).join(" ")}
+                      {seg.text}
                     </p>
                   </div>
                 );
