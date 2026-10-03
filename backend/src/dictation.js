@@ -25,6 +25,23 @@ function splitWords(text) {
   return text.split(/[\s‐-―-]+/).filter(Boolean);
 }
 
+/**
+ * 歌詞1行を単語に分割し、各語がカッコ内（コーラスや合いの手）かどうかを判定する。
+ * カッコ内の語は「書かなくても減点しない（書いていれば一致として数える）」任意の語として扱う。
+ * カッコの対応は行ごとに数え直す（片側だけ閉じ忘れたカッコが後続の行に影響しないようにする）。
+ */
+function tokenizeRefLine(text) {
+  const tokens = [];
+  let depth = 0;
+  for (const raw of splitWords(text)) {
+    const opens = (raw.match(/[(（]/g) ?? []).length;
+    const closes = (raw.match(/[)）]/g) ?? []).length;
+    tokens.push({ raw, optional: depth > 0 || opens > 0 });
+    depth = Math.max(0, depth + opens - closes);
+  }
+  return tokens;
+}
+
 /** Damerau-Levenshtein（隣接文字の入れ替えを1手と数える）距離 */
 export function editDistance(a, b) {
   const n = a.length;
@@ -92,9 +109,9 @@ export function evaluateDictation(refLines, userText) {
   // 歌詞側を単語列に展開
   const ref = [];
   for (const line of refLines) {
-    for (const raw of splitWords(line.original)) {
+    for (const { raw, optional } of tokenizeRefLine(line.original)) {
       const norm = normalizeWord(raw);
-      if (norm) ref.push({ lineIndex: line.lineIndex, raw, norm });
+      if (norm) ref.push({ lineIndex: line.lineIndex, raw, norm, optional });
     }
   }
 
@@ -112,14 +129,24 @@ export function evaluateDictation(refLines, userText) {
   const n = ref.length;
   const m = user.length;
 
+  // 歌詞i語目とユーザーj語目を対応づけるコスト。任意の語（カッコ内）は、ほぼ同じ語を書いたときだけ対応づけ、
+  // ?? や似ていない語は吸収しない（無関係な語を聞き違いとして誤って対応づけないため）
+  const subCostAt = (i, j) => {
+    const cost = substitutionCost(ref[i].norm, user[j].norm);
+    if (ref[i].optional && cost > 0.6) return Infinity;
+    return cost;
+  };
+  // 歌詞の語をユーザーが書いていないコスト。任意の語は書かなくても減点しない
+  const delCostAt = (i) => (ref[i].optional ? 0 : 1);
+
   // dp[i][j]: 歌詞i語・ユーザーj語までの最小コスト。歌詞先頭の読み飛ばしは無コスト
   const dp = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
   for (let j = 1; j <= m; j++) dp[0][j] = j;
   for (let i = 1; i <= n; i++) {
     dp[i][0] = 0;
     for (let j = 1; j <= m; j++) {
-      const sub = dp[i - 1][j - 1] + substitutionCost(ref[i - 1].norm, user[j - 1].norm);
-      const del = dp[i - 1][j] + 1; // 歌詞の語をユーザーが書いていない
+      const sub = dp[i - 1][j - 1] + subCostAt(i - 1, j - 1);
+      const del = dp[i - 1][j] + delCostAt(i - 1); // 歌詞の語をユーザーが書いていない
       const ins = dp[i][j - 1] + 1; // ユーザーが余計な語を書いた
       dp[i][j] = Math.min(sub, del, ins);
     }
@@ -137,15 +164,15 @@ export function evaluateDictation(refLines, userText) {
   let j = m;
   while (j > 0 || (i > 0 && dp[i][j] > 0)) {
     if (i > 0 && j > 0) {
-      const sub = dp[i - 1][j - 1] + substitutionCost(ref[i - 1].norm, user[j - 1].norm);
-      if (Math.abs(dp[i][j] - sub) < 1e-9) {
+      const sub = dp[i - 1][j - 1] + subCostAt(i - 1, j - 1);
+      if (Number.isFinite(sub) && Math.abs(dp[i][j] - sub) < 1e-9) {
         ops.push({ r: i - 1, u: j - 1 });
         i--;
         j--;
         continue;
       }
     }
-    if (i > 0 && Math.abs(dp[i][j] - (dp[i - 1][j] + 1)) < 1e-9) {
+    if (i > 0 && Math.abs(dp[i][j] - (dp[i - 1][j] + delCostAt(i - 1))) < 1e-9) {
       ops.push({ r: i - 1, u: -1 });
       i--;
       continue;
@@ -185,7 +212,13 @@ export function evaluateDictation(refLines, userText) {
   const items = ref.map((w, idx) => {
     const u = matchOfRef[idx];
     if (u < 0) {
-      return { lineIndex: w.lineIndex, ref: w.raw, user: null, status: "missing" };
+      // 任意の語（カッコ内）は、書かれていなくても脱落とは数えない
+      return {
+        lineIndex: w.lineIndex,
+        ref: w.raw,
+        user: null,
+        status: w.optional ? "optional" : "missing",
+      };
     }
     const uw = user[u];
     if (uw.norm === null) {
@@ -239,6 +272,7 @@ export function evaluateDictation(refLines, userText) {
   for (const line of lines) {
     if (line.skipped) continue;
     for (const item of line.items) {
+      if (item.status === "optional") continue; // 書かれていない任意の語は採点対象外
       counts[item.status] += 1;
       total += 1;
     }

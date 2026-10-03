@@ -851,7 +851,9 @@ app.post("/api/dictation/explain", async (req, res) => {
       });
     }
 
-    const mistakes = resultLine.items.filter((i) => i.status !== "match");
+    const mistakes = resultLine.items.filter(
+      (i) => i.status !== "match" && i.status !== "optional"
+    );
     if (mistakes.length === 0) {
       return res.status(400).json({ error: "この行に間違いはありません" });
     }

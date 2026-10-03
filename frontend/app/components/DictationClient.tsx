@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import YouTubeSeeker from "./YouTubeSeeker";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-type Status = "match" | "misheard" | "missing" | "spelling" | "form" | "gap";
+// optional: カッコ内（コーラスなど）の語で、書かれていなかったもの。間違いにも採点対象にも数えない
+type Status = "match" | "misheard" | "missing" | "spelling" | "form" | "gap" | "optional";
 
 type Item = {
   ref: string;
@@ -30,7 +32,7 @@ type Result = {
   lines: ResultLine[];
   summary: {
     total: number;
-    counts: Record<Status, number>;
+    counts: Record<Exclude<Status, "optional">, number>;
     extra: number;
     gapMarks: number;
     accuracy: number;
@@ -48,7 +50,10 @@ export type Attempt = {
   result: Result;
 };
 
-const STATUS_META: Record<Exclude<Status, "match">, { label: string; word: string; hint: string }> = {
+const STATUS_META: Record<
+  Exclude<Status, "match" | "optional">,
+  { label: string; word: string; hint: string }
+> = {
   misheard: {
     label: "聞き違い",
     word: "bg-rose-100 text-rose-800",
@@ -120,6 +125,7 @@ function accuracyOnLines(result: Result, lineIndexes: number[]): number | null {
     const line = result.lines.find((l) => l.lineIndex === idx);
     if (!line || line.skipped) return null;
     for (const item of line.items) {
+      if (item.status === "optional") continue;
       total += 1;
       if (item.status === "match") match += 1;
     }
@@ -128,7 +134,7 @@ function accuracyOnLines(result: Result, lineIndexes: number[]): number | null {
 }
 
 function lineHasMistake(line: ResultLine) {
-  return !line.skipped && line.items.some((i) => i.status !== "match");
+  return !line.skipped && line.items.some((i) => i.status !== "match" && i.status !== "optional");
 }
 
 type RetrySegment =
@@ -357,6 +363,9 @@ export default function DictationClient({
 
   return (
     <div className="flex flex-col gap-8">
+      {/* YouTube再生（Alt+矢印キーで入力欄から5秒戻し・送り） */}
+      <YouTubeSeeker trackId={trackId} />
+
       {/* 入力 */}
       {retryBase ? (
         <section ref={retryPanelRef} className="flex flex-col gap-3">
@@ -724,13 +733,18 @@ function ResultView({
                       <span key={i} className="inline-flex items-start gap-1.5">
                         <span className="inline-flex flex-col items-start leading-tight">
                           <span
+                            title={item.status === "optional" ? "カッコ内（任意）：書かなくても減点されません" : undefined}
                             className={`rounded px-1 text-sm ${
-                              item.status === "match" ? "" : STATUS_META[item.status].word
+                              item.status === "match"
+                                ? ""
+                                : item.status === "optional"
+                                ? "text-zinc-400"
+                                : STATUS_META[item.status].word
                             }`}
                           >
                             {item.ref}
                           </span>
-                          {item.status !== "match" && (
+                          {item.status !== "match" && item.status !== "optional" && (
                             <span className="px-1 text-[10px] text-zinc-500">
                               {item.user ?? "—"}
                             </span>
