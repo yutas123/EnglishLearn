@@ -35,6 +35,7 @@ model Track {
   spanExplanations  SpanExplanation[]
   listeningMarks    ListeningMark[]
   dictationAttempts DictationAttempt[]
+  lineNotes         TrackLineNote[]
   createdAt         DateTime           @default(now())
 }
 
@@ -126,6 +127,17 @@ model DictationAttempt {
   createdAt  DateTime @default(now())
 
   @@index([trackId, createdAt])
+}
+
+model TrackLineNote {
+  id        String   @id @default(cuid())
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  lineIndex Int
+  note      String // 書き取りで「なぜ聴き取れなかったか」の自分用メモ
+  updatedAt DateTime @updatedAt
+
+  @@unique([trackId, lineIndex])
 }
 
 model Highlight {

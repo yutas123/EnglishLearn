@@ -192,10 +192,12 @@ export default function DictationClient({
   trackId,
   initialAttempts,
   youtubeVideoId,
+  initialNotes,
 }: {
   trackId: string;
   initialAttempts: Attempt[];
   youtubeVideoId: string | null;
+  initialNotes: Record<number, string>;
 }) {
   const draftKey = `dictation-draft:${trackId}`;
   const [attempts, setAttempts] = useState<Attempt[]>(initialAttempts);
@@ -209,6 +211,8 @@ export default function DictationClient({
   const [onlyMistakes, setOnlyMistakes] = useState(false);
   const [explaining, setExplaining] = useState<Set<string>>(new Set());
   const [explainErrors, setExplainErrors] = useState<Record<string, string>>({});
+  // 行ごとの「聴き取れなかった理由」メモ（曲＋行番号に紐付くので、どの記録を見ても同じ行に出る）
+  const [notes, setNotes] = useState<Record<number, string>>(initialNotes);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const retryPanelRef = useRef<HTMLDivElement>(null);
 
@@ -293,6 +297,35 @@ export default function DictationClient({
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function saveNote(lineIndex: number, note: string) {
+    const trimmed = note.trim();
+    if (trimmed === (notes[lineIndex] ?? "") || !BACKEND_URL) return;
+    const previous = notes[lineIndex];
+    setNotes((prev) => {
+      const next = { ...prev };
+      if (trimmed) next[lineIndex] = trimmed;
+      else delete next[lineIndex];
+      return next;
+    });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/tracks/${trackId}/notes/${lineIndex}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: trimmed }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // 保存に失敗したら元に戻す
+      setNotes((prev) => {
+        const next = { ...prev };
+        if (previous) next[lineIndex] = previous;
+        else delete next[lineIndex];
+        return next;
+      });
+      setError("メモを保存できませんでした");
     }
   }
 
@@ -520,6 +553,8 @@ export default function DictationClient({
         <ResultView
           attempt={selected}
           attempts={attempts}
+          notes={notes}
+          onSaveNote={saveNote}
           onlyMistakes={onlyMistakes}
           setOnlyMistakes={setOnlyMistakes}
           explaining={explaining}
@@ -576,6 +611,8 @@ export default function DictationClient({
 function ResultView({
   attempt,
   attempts,
+  notes,
+  onSaveNote,
   onlyMistakes,
   setOnlyMistakes,
   explaining,
@@ -586,6 +623,8 @@ function ResultView({
 }: {
   attempt: Attempt;
   attempts: Attempt[];
+  notes: Record<number, string>;
+  onSaveNote: (lineIndex: number, note: string) => void;
   onlyMistakes: boolean;
   setOnlyMistakes: (v: boolean) => void;
   explaining: Set<string>;
@@ -654,7 +693,28 @@ function ResultView({
         )}
       </div>
 
-      {/* 内訳 */}
+      <div className="flex flex-wrap items-center gap-3">
+        {mistakeLineCount > 0 && (
+          <button
+            onClick={onRetry}
+            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
+          >
+            🔁 間違えた {mistakeLineCount} 行だけ再挑戦
+          </button>
+        )}
+        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <input
+            type="checkbox"
+            checked={onlyMistakes}
+            onChange={(e) => setOnlyMistakes(e.target.checked)}
+          />
+          間違えた行だけ表示
+        </label>
+      </div>
+
+      <details className="text-xs text-zinc-500">
+        <summary className="w-fit cursor-pointer select-none">内訳・AI解説 ▾</summary>
+        <div className="mt-2 flex flex-col gap-3">
       <div className="flex flex-wrap gap-2 text-xs">
         {(Object.keys(STATUS_META) as (keyof typeof STATUS_META)[]).map((s) => (
           <span
@@ -699,33 +759,17 @@ function ResultView({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        {mistakeLineCount > 0 && (
-          <button
-            onClick={onRetry}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
-          >
-            🔁 間違えた {mistakeLineCount} 行だけ再挑戦
-          </button>
-        )}
-        {unexplainedLines > 0 && (
-          <button
-            onClick={onExplainAll}
-            disabled={anyExplaining}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50"
-          >
-            {anyExplaining ? "解説を生成中..." : `🗣️ 残り ${unexplainedLines} 行をまとめて解説`}
-          </button>
-        )}
-        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-          <input
-            type="checkbox"
-            checked={onlyMistakes}
-            onChange={(e) => setOnlyMistakes(e.target.checked)}
-          />
-          間違えた行だけ表示
-        </label>
-      </div>
+          {unexplainedLines > 0 && (
+            <button
+              onClick={onExplainAll}
+              disabled={anyExplaining}
+              className="w-fit rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {anyExplaining ? "解説を生成中..." : `🗣️ 残り ${unexplainedLines} 行をまとめて解説`}
+            </button>
+          )}
+        </div>
+      </details>
 
       {/* 行ごとの判定 */}
       <div className="flex flex-col divide-y divide-zinc-100">
@@ -774,7 +818,16 @@ function ResultView({
                 </div>
 
                 {hasMistake && (
-                  <div className="ml-9 flex flex-col gap-1.5">
+                  <div className="ml-9 flex flex-col gap-1">
+                    <NoteEditor
+                      note={notes[line.lineIndex] ?? ""}
+                      onSave={(text) => onSaveNote(line.lineIndex, text)}
+                    />
+                    <details className="text-xs">
+                      <summary className="w-fit cursor-pointer select-none text-zinc-400 hover:text-zinc-600">
+                        AI解説 ▾
+                      </summary>
+                      <div className="mt-1.5 flex flex-col gap-1.5">
                     {line.explanation && (
                       <p className="break-words rounded bg-zinc-50 p-2 text-xs leading-relaxed text-zinc-600">
                         🗣️ {line.explanation}
@@ -813,6 +866,8 @@ function ResultView({
                     {explainErrors[key] && (
                       <p className="text-xs text-red-600">{explainErrors[key]}</p>
                     )}
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>
@@ -826,6 +881,51 @@ function ResultView({
         </p>
       )}
     </section>
+  );
+}
+
+/** 行ごとの一言メモ。メモがあれば薄い黄色で常時表示し、押すと編集、フォーカスを外すと保存する */
+function NoteEditor({ note, onSave }: { note: string; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note);
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          onSave(draft);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setDraft(note);
+            setEditing(false);
+          }
+        }}
+        maxLength={500}
+        placeholder="なぜ聴き取れなかった？（例: 弱形で消えてた）"
+        className="w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-base focus:outline-none sm:text-xs"
+      />
+    );
+  }
+  return (
+    <button
+      onClick={() => {
+        setDraft(note);
+        setEditing(true);
+      }}
+      className={
+        note
+          ? "w-fit max-w-full break-words rounded bg-amber-50 px-2 py-1 text-left text-xs text-amber-900"
+          : "w-fit text-xs text-zinc-400 hover:text-zinc-600"
+      }
+    >
+      {note ? `✎ ${note}` : "✎ メモ"}
+    </button>
   );
 }
 

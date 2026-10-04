@@ -737,6 +737,32 @@ app.put("/api/tracks/:id/youtube", async (req, res) => {
 });
 
 /**
+ * PUT /api/tracks/:id/notes/:lineIndex — 行ごとの「聴き取れなかった理由」メモを保存する（空文字なら削除）
+ */
+app.put("/api/tracks/:id/notes/:lineIndex", async (req, res) => {
+  try {
+    const lineIndex = Number(req.params.lineIndex);
+    const note = typeof req.body.note === "string" ? req.body.note.trim() : null;
+    if (!Number.isInteger(lineIndex) || lineIndex < 0 || note === null || note.length > 500) {
+      return res.status(400).json({ error: "メモが不正です（500文字まで）" });
+    }
+    const where = { trackId_lineIndex: { trackId: req.params.id, lineIndex } };
+    if (note === "") {
+      await prisma.trackLineNote.delete({ where }).catch(() => {});
+    } else {
+      await prisma.trackLineNote.upsert({
+        where,
+        create: { trackId: req.params.id, lineIndex, note },
+        update: { note },
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/dictation/attempts — 書き取りテキストを歌詞と照合して採点し、結果を保存する
  * body は次のいずれか:
  *  - { trackId, text }                      曲全体を通して書いたテキストを採点する

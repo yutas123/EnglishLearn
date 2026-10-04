@@ -14,7 +14,7 @@ export default async function DictationPage({
   const { trackId } = await params;
 
   // 歌詞本文はここでは取得しない（答え合わせ前に原文を見せないため、行数だけ数える）
-  const [track, lineCount, attempts] = await Promise.all([
+  const [track, lineCount, attempts, noteRows] = await Promise.all([
     prisma.track.findUnique({ where: { id: trackId }, include: { album: true } }),
     prisma.translation.count({ where: { trackId } }),
     prisma.dictationAttempt.findMany({
@@ -22,6 +22,7 @@ export default async function DictationPage({
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
+    prisma.trackLineNote.findMany({ where: { trackId } }),
   ]);
 
   if (!track) {
@@ -38,6 +39,10 @@ export default async function DictationPage({
     gapCount: a.gapCount,
     result: a.result as unknown as Attempt["result"],
   }));
+
+  const initialNotes: Record<number, string> = Object.fromEntries(
+    noteRows.map((n) => [n.lineIndex, n.note])
+  );
 
   return (
     <main className="flex flex-col gap-6">
@@ -69,6 +74,7 @@ export default async function DictationPage({
           trackId={track.id}
           initialAttempts={initialAttempts}
           youtubeVideoId={track.youtubeVideoId}
+          initialNotes={initialNotes}
         />
       )}
     </main>
