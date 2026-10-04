@@ -214,7 +214,7 @@ export default function DictationClient({
   // 行ごとの「聴き取れなかった理由」メモ（曲＋行番号に紐付くので、どの記録を見ても同じ行に出る）
   const [notes, setNotes] = useState<Record<number, string>>(initialNotes);
   // このページを開いてから原文を修正した行（過去の結果は当時の原文のままなので、修正後の文をここで見せる）
-  const [fixedLines, setFixedLines] = useState<Record<number, string>>({});
+  const [fixedLines, setFixedLines] = useState<Record<number, { original: string; translation: string | null }>>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const retryPanelRef = useRef<HTMLDivElement>(null);
 
@@ -340,7 +340,10 @@ export default function DictationClient({
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "原文を修正できませんでした");
-    setFixedLines((prev) => ({ ...prev, [lineIndex]: data.original }));
+    setFixedLines((prev) => ({
+      ...prev,
+      [lineIndex]: { original: data.original, translation: data.translation ?? null },
+    }));
   }
 
   function startRetry(attempt: Attempt) {
@@ -643,7 +646,7 @@ function ResultView({
   attempts: Attempt[];
   notes: Record<number, string>;
   onSaveNote: (lineIndex: number, note: string) => void;
-  fixedLines: Record<number, string>;
+  fixedLines: Record<number, { original: string; translation: string | null }>;
   onFixLine: (lineIndex: number, original: string) => Promise<void>;
   onlyMistakes: boolean;
   setOnlyMistakes: (v: boolean) => void;
@@ -845,13 +848,18 @@ function ResultView({
                         onSave={(text) => onSaveNote(line.lineIndex, text)}
                       />
                       <LineFixer
-                        initial={fixedLines[line.lineIndex] ?? line.items.map((it) => it.ref).join(" ")}
+                        initial={fixedLines[line.lineIndex]?.original ?? line.items.map((it) => it.ref).join(" ")}
                         onSave={(text) => onFixLine(line.lineIndex, text)}
                       />
                     </div>
                     {fixedLines[line.lineIndex] && (
                       <p className="break-words text-xs text-emerald-700">
-                        原文を修正: {fixedLines[line.lineIndex]}
+                        原文を修正: {fixedLines[line.lineIndex].original}
+                        {fixedLines[line.lineIndex].translation && (
+                          <span className="block text-zinc-500">
+                            対訳も更新: {fixedLines[line.lineIndex].translation}
+                          </span>
+                        )}
                       </p>
                     )}
                     <details className="text-xs">
@@ -985,7 +993,7 @@ function LineFixer({ initial, onSave }: { initial: string; onSave: (text: string
   return (
     <div className="flex w-full flex-col gap-1 rounded border border-zinc-200 p-2">
       <p className="text-[11px] text-zinc-500">
-        この行の歌詞（原文）を修正します。過去の結果は変わらず、次回以降の採点から反映されます。
+        この行の歌詞（原文）を修正します。対訳も自動で作り直します（数秒かかります）。過去の結果は変わらず、次回以降の採点から反映されます。
       </p>
       <input
         value={draft}
@@ -1013,7 +1021,7 @@ function LineFixer({ initial, onSave }: { initial: string; onSave: (text: string
           }}
           className="rounded-full bg-zinc-900 px-3 py-1 text-white disabled:opacity-40"
         >
-          {saving ? "保存中..." : "保存"}
+          {saving ? "修正・翻訳中..." : "保存"}
         </button>
         <button onClick={() => setOpen(false)} className="text-zinc-500 underline decoration-dotted">
           キャンセル

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./src/db.js";
 import {
   getCurrentlyPlayingAlbum,
@@ -20,6 +21,7 @@ import {
 } from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
 import { translateAndSaveTrack } from "./src/jobs.js";
+import { translateLyrics } from "./src/translator.js";
 import {
   OPENAI_API_KEY,
   GENIUS_ACCESS_TOKEN,
@@ -737,7 +739,8 @@ app.put("/api/tracks/:id/youtube", async (req, res) => {
 });
 
 /**
- * PUT /api/tracks/:id/lines/:lineIndex — 歌詞1行の原文を修正する（過去の書き取り結果は当時の原文のまま変えない）
+ * PUT /api/tracks/:id/lines/:lineIndex — 歌詞1行の原文を修正し、その行の対訳・解説も作り直す
+ * （過去の書き取り結果は当時の原文のまま変えない。翻訳に失敗しても原文の修正は保存し、対訳は元のまま残す）
  */
 app.put("/api/tracks/:id/lines/:lineIndex", async (req, res) => {
   try {
@@ -746,12 +749,49 @@ app.put("/api/tracks/:id/lines/:lineIndex", async (req, res) => {
     if (!Number.isInteger(lineIndex) || !original || original.length > 500) {
       return res.status(400).json({ error: "原文が不正です（1〜500文字）" });
     }
-    const { count } = await prisma.translation.updateMany({
-      where: { trackId: req.params.id, lineIndex },
-      data: { original },
+    const trackId = req.params.id;
+
+    const target = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
+    if (!target) return res.status(404).json({ error: "該当する行がありません" });
+
+    // 前後2行を文脈として渡して、その行だけ訳し直す
+    let translated = null;
+    if (OPENAI_API_KEY) {
+      try {
+        const [neighbors, track] = await Promise.all([
+          prisma.translation.findMany({
+            where: { trackId, lineIndex: { gte: lineIndex - 2, lte: lineIndex + 2, not: lineIndex } },
+            orderBy: { lineIndex: "asc" },
+            select: { lineIndex: true, original: true },
+          }),
+          prisma.track.findUnique({ where: { id: trackId }, include: { album: true } }),
+        ]);
+        const lines = [...neighbors, { lineIndex, original }]
+          .sort((x, y) => x.lineIndex - y.lineIndex);
+        const { translations } = await translateLyrics(
+          lines.map((l) => l.original),
+          OPENAI_API_KEY,
+          { artistName: track?.album.artistName }
+        );
+        const t = translations[lines.findIndex((l) => l.lineIndex === lineIndex)];
+        if (t?.translation) translated = t;
+      } catch (err) {
+        console.log(`    ⚠️ 1行の再翻訳に失敗: ${err.message}`);
+      }
+    }
+
+    await prisma.translation.update({
+      where: { id: target.id },
+      data: translated
+        ? {
+            original,
+            translation: translated.translation,
+            explanation: translated.explanation || null,
+            hardSpans: translated.hardSpans?.length ? translated.hardSpans : Prisma.DbNull,
+          }
+        : { original, hardSpans: Prisma.DbNull }, // 対訳は残すが、古い原文に基づく難所ハイライトは外す
     });
-    if (count === 0) return res.status(404).json({ error: "該当する行がありません" });
-    res.json({ ok: true, original });
+    res.json({ ok: true, original, translation: translated?.translation ?? null });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
