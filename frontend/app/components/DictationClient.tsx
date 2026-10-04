@@ -191,9 +191,11 @@ function countGrammar(result: Result) {
 export default function DictationClient({
   trackId,
   initialAttempts,
+  youtubeVideoId,
 }: {
   trackId: string;
   initialAttempts: Attempt[];
+  youtubeVideoId: string | null;
 }) {
   const draftKey = `dictation-draft:${trackId}`;
   const [attempts, setAttempts] = useState<Attempt[]>(initialAttempts);
@@ -361,10 +363,13 @@ export default function DictationClient({
     }
   }
 
+  // 答え合わせの結果を見ている間は、入力欄を画面下に固定して、結果を見ながら練習のタイピングができるようにする
+  const dockInput = selected !== null && !retryBase;
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className={`flex flex-col gap-8 ${dockInput ? "pb-64" : ""}`}>
       {/* YouTube再生（Ctrl+矢印キーで入力欄から5秒戻し・送り） */}
-      <YouTubeSeeker trackId={trackId} />
+      <YouTubeSeeker trackId={trackId} initialVideoId={youtubeVideoId} />
 
       {/* 入力 */}
       {retryBase ? (
@@ -453,18 +458,27 @@ export default function DictationClient({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </section>
       ) : (
-        <section className="flex flex-col gap-2">
-          <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
-            Spotifyで曲を聴きながら、聞こえた英語を書いてください。行の区切りは歌詞と合っていなくて構いません。
-            聞き取れない箇所は <code className="rounded bg-zinc-200 px-1">??</code>{" "}
-            と書いておくと、「自分で気づいていた聞き取れなさ」として記録されます。
-          </p>
+        <section
+          className={
+            dockInput
+              ? "fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] backdrop-blur"
+              : "flex flex-col gap-2"
+          }
+        >
+         <div className={dockInput ? "mx-auto flex max-w-3xl flex-col gap-2 px-4 py-2" : "contents"}>
+          {!dockInput && (
+            <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
+              Spotifyで曲を聴きながら、聞こえた英語を書いてください。行の区切りは歌詞と合っていなくて構いません。
+              聞き取れない箇所は <code className="rounded bg-zinc-200 px-1">??</code>{" "}
+              と書いておくと、「自分で気づいていた聞き取れなさ」として記録されます。
+            </p>
+          )}
 
           <textarea
             ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={10}
+            rows={dockInput ? 5 : 10}
             placeholder="聞こえた英語をここに書く…"
             className="w-full rounded-lg border border-zinc-300 p-3 text-base leading-relaxed focus:border-zinc-500 focus:outline-none"
             spellCheck={false}
@@ -497,6 +511,7 @@ export default function DictationClient({
             )}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
+         </div>
         </section>
       )}
 

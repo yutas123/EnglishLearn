@@ -85,26 +85,39 @@ function formatTime(seconds: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export default function YouTubeSeeker({ trackId }: { trackId: string }) {
-  const storageKey = `dictation-youtube:${trackId}`;
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+/** 動画IDを曲に紐付けてDBへ保存する（null で解除）。失敗しても再生は続けられる */
+function saveVideoId(trackId: string, videoId: string | null) {
+  if (!BACKEND_URL) return;
+  fetch(`${BACKEND_URL}/api/tracks/${trackId}/youtube`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoId }),
+  }).catch(() => {});
+}
+
+export default function YouTubeSeeker({
+  trackId,
+  initialVideoId,
+}: {
+  trackId: string;
+  initialVideoId: string | null;
+}) {
   const [urlInput, setUrlInput] = useState("");
-  const [videoId, setVideoId] = useState<string | null>(null);
+  const [videoId, setVideoId] = useState<string | null>(initialVideoId);
+  // 操作キーの修飾キー。Macの Ctrl+矢印 は OS の Mission Control に取られてブラウザに届かないため、Mac は Command を使う
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(/Mac/i.test(navigator.platform));
+  }, []);
+  const modKey = isMac ? "⌘" : "Ctrl";
   const [error, setError] = useState<string | null>(null);
   const [time, setTime] = useState(0);
   const [flash, setFlash] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // 動画URLはこのブラウザにだけ保持する（消えても再入力すればよい便宜機能）
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) setVideoId(saved);
-    } catch {
-      // localStorage が使えない環境では保存なしで動作する
-    }
-  }, [storageKey]);
 
   // プレーヤーの生成。動画が変わったら同じプレーヤーで読み込み直す
   useEffect(() => {
@@ -188,11 +201,12 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
     else p.playVideo();
   }, []);
 
-  // Ctrl + ←/→/↓ で操作する。矢印キー単体は入力欄のカーソル移動に使われるため、修飾キーを付ける（Ctrl+矢印の「単語単位の移動」は、動画を設定している間だけ使えなくなる）
+  // Ctrl（Macは Command）+ ←/→/↓ で操作する。矢印キー単体は入力欄のカーソル移動に使われるため、修飾キーを付ける（「単語単位の移動」は、動画を設定している間だけ使えなくなる）
   useEffect(() => {
     if (!videoId) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.isComposing) return;
+      const modOk = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (!modOk || e.altKey || e.shiftKey || e.isComposing) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         seek(-SEEK_SECONDS);
@@ -206,7 +220,7 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [videoId, seek, togglePlay]);
+  }, [videoId, isMac, seek, togglePlay]);
 
   function handleSetUrl() {
     const id = parseVideoId(urlInput);
@@ -217,11 +231,7 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
     setError(null);
     setVideoId(id);
     setUrlInput("");
-    try {
-      localStorage.setItem(storageKey, id);
-    } catch {
-      // 保存できなくても再生は続けられる
-    }
+    saveVideoId(trackId, id);
   }
 
   function handleClear() {
@@ -230,11 +240,7 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
     if (containerRef.current) containerRef.current.innerHTML = "";
     setVideoId(null);
     setError(null);
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      // 同上
-    }
+    saveVideoId(trackId, null);
   }
 
   return (
@@ -243,10 +249,10 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
         <div className="flex flex-col gap-1.5">
           <p className="text-xs leading-relaxed text-zinc-500">
             YouTubeのURLを入れると、この画面の中で再生できます。入力欄で文字を打ちながら、
-            <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> + <kbd className="rounded bg-zinc-100 px-1">←</kbd>
-            で{SEEK_SECONDS}秒戻し、<kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> +{" "}
+            <kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd> + <kbd className="rounded bg-zinc-100 px-1">←</kbd>
+            で{SEEK_SECONDS}秒戻し、<kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd> +{" "}
             <kbd className="rounded bg-zinc-100 px-1">→</kbd> で{SEEK_SECONDS}秒送り、
-            <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd> + <kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
+            <kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd> + <kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
             で再生/停止ができます。
           </p>
           <div className="flex gap-2">
@@ -304,9 +310,9 @@ export default function YouTubeSeeker({ trackId }: { trackId: string }) {
                 </button>
               </div>
               <p className="text-[11px] leading-relaxed text-zinc-500">
-                入力欄で <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">←</kbd>{" "}
-                戻す / <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">→</kbd>{" "}
-                送る / <kbd className="rounded bg-zinc-100 px-1">Ctrl</kbd>+<kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
+                入力欄で <kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd>+<kbd className="rounded bg-zinc-100 px-1">←</kbd>{" "}
+                戻す / <kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd>+<kbd className="rounded bg-zinc-100 px-1">→</kbd>{" "}
+                送る / <kbd className="rounded bg-zinc-100 px-1">{modKey}</kbd>+<kbd className="rounded bg-zinc-100 px-1">↓</kbd>{" "}
                 再生・停止
               </p>
               <button

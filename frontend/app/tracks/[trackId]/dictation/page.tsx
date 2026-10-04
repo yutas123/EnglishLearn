@@ -65,7 +65,11 @@ export default async function DictationPage({
       {lineCount === 0 ? (
         <p className="text-sm text-zinc-500">歌詞データがないため、書き取りは使えません。</p>
       ) : (
-        <DictationClient trackId={track.id} initialAttempts={initialAttempts} />
+        <DictationClient
+          trackId={track.id}
+          initialAttempts={initialAttempts}
+          youtubeVideoId={track.youtubeVideoId}
+        />
       )}
     </main>
   );

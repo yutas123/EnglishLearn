@@ -718,6 +718,25 @@ app.post("/api/listening/explain", async (req, res) => {
 });
 
 /**
+ * PUT /api/tracks/:id/youtube — 書き取りモードで再生するYouTube動画IDを保存する（null で解除）
+ */
+app.put("/api/tracks/:id/youtube", async (req, res) => {
+  try {
+    const { videoId } = req.body;
+    if (videoId !== null && !(typeof videoId === "string" && /^[\w-]{11}$/.test(videoId))) {
+      return res.status(400).json({ error: "videoId が不正です" });
+    }
+    await prisma.track.update({
+      where: { id: req.params.id },
+      data: { youtubeVideoId: videoId },
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/dictation/attempts — 書き取りテキストを歌詞と照合して採点し、結果を保存する
  * body は次のいずれか:
  *  - { trackId, text }                      曲全体を通して書いたテキストを採点する

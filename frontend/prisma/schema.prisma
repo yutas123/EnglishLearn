@@ -27,6 +27,7 @@ model Track {
   trackNo           Int
   title             String
   analysis          String? // 楽曲解説（generateSongAnalysis の出力）
+  youtubeVideoId    String? // 書き取りモードで再生するYouTube動画ID
   translations      Translation[]
   highlights        Highlight[]
   vocabEntries      VocabEntry[]
