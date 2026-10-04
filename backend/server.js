@@ -737,6 +737,27 @@ app.put("/api/tracks/:id/youtube", async (req, res) => {
 });
 
 /**
+ * PUT /api/tracks/:id/lines/:lineIndex — 歌詞1行の原文を修正する（過去の書き取り結果は当時の原文のまま変えない）
+ */
+app.put("/api/tracks/:id/lines/:lineIndex", async (req, res) => {
+  try {
+    const lineIndex = Number(req.params.lineIndex);
+    const original = typeof req.body.original === "string" ? req.body.original.trim() : "";
+    if (!Number.isInteger(lineIndex) || !original || original.length > 500) {
+      return res.status(400).json({ error: "原文が不正です（1〜500文字）" });
+    }
+    const { count } = await prisma.translation.updateMany({
+      where: { trackId: req.params.id, lineIndex },
+      data: { original },
+    });
+    if (count === 0) return res.status(404).json({ error: "該当する行がありません" });
+    res.json({ ok: true, original });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * PUT /api/tracks/:id/notes/:lineIndex — 行ごとの「聴き取れなかった理由」メモを保存する（空文字なら削除）
  */
 app.put("/api/tracks/:id/notes/:lineIndex", async (req, res) => {

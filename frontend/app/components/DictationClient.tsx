@@ -213,6 +213,8 @@ export default function DictationClient({
   const [explainErrors, setExplainErrors] = useState<Record<string, string>>({});
   // 行ごとの「聴き取れなかった理由」メモ（曲＋行番号に紐付くので、どの記録を見ても同じ行に出る）
   const [notes, setNotes] = useState<Record<number, string>>(initialNotes);
+  // このページを開いてから原文を修正した行（過去の結果は当時の原文のままなので、修正後の文をここで見せる）
+  const [fixedLines, setFixedLines] = useState<Record<number, string>>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const retryPanelRef = useRef<HTMLDivElement>(null);
 
@@ -327,6 +329,18 @@ export default function DictationClient({
       });
       setError("メモを保存できませんでした");
     }
+  }
+
+  async function fixLine(lineIndex: number, original: string) {
+    if (!BACKEND_URL) throw new Error("設定エラー");
+    const res = await fetch(`${BACKEND_URL}/api/tracks/${trackId}/lines/${lineIndex}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ original }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "原文を修正できませんでした");
+    setFixedLines((prev) => ({ ...prev, [lineIndex]: data.original }));
   }
 
   function startRetry(attempt: Attempt) {
@@ -555,6 +569,8 @@ export default function DictationClient({
           attempts={attempts}
           notes={notes}
           onSaveNote={saveNote}
+          fixedLines={fixedLines}
+          onFixLine={fixLine}
           onlyMistakes={onlyMistakes}
           setOnlyMistakes={setOnlyMistakes}
           explaining={explaining}
@@ -613,6 +629,8 @@ function ResultView({
   attempts,
   notes,
   onSaveNote,
+  fixedLines,
+  onFixLine,
   onlyMistakes,
   setOnlyMistakes,
   explaining,
@@ -625,6 +643,8 @@ function ResultView({
   attempts: Attempt[];
   notes: Record<number, string>;
   onSaveNote: (lineIndex: number, note: string) => void;
+  fixedLines: Record<number, string>;
+  onFixLine: (lineIndex: number, original: string) => Promise<void>;
   onlyMistakes: boolean;
   setOnlyMistakes: (v: boolean) => void;
   explaining: Set<string>;
@@ -819,10 +839,21 @@ function ResultView({
 
                 {hasMistake && (
                   <div className="ml-9 flex flex-col gap-1">
-                    <NoteEditor
-                      note={notes[line.lineIndex] ?? ""}
-                      onSave={(text) => onSaveNote(line.lineIndex, text)}
-                    />
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <NoteEditor
+                        note={notes[line.lineIndex] ?? ""}
+                        onSave={(text) => onSaveNote(line.lineIndex, text)}
+                      />
+                      <LineFixer
+                        initial={fixedLines[line.lineIndex] ?? line.items.map((it) => it.ref).join(" ")}
+                        onSave={(text) => onFixLine(line.lineIndex, text)}
+                      />
+                    </div>
+                    {fixedLines[line.lineIndex] && (
+                      <p className="break-words text-xs text-emerald-700">
+                        原文を修正: {fixedLines[line.lineIndex]}
+                      </p>
+                    )}
                     <details className="text-xs">
                       <summary className="w-fit cursor-pointer select-none text-zinc-400 hover:text-zinc-600">
                         AI解説 ▾
@@ -926,6 +957,70 @@ function NoteEditor({ note, onSave }: { note: string; onSave: (text: string) => 
     >
       {note ? `✎ ${note}` : "✎ メモ"}
     </button>
+  );
+}
+
+/** 歌詞原文の修正（めったに使わないので、目立たない「⋯」から開く）。次回以降の採点から新しい原文が使われる */
+function LineFixer({ initial, onSave }: { initial: string; onSave: (text: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => {
+          setDraft(initial);
+          setError(null);
+          setOpen(true);
+        }}
+        title="この行の歌詞（原文）を修正"
+        className="text-xs text-zinc-300 hover:text-zinc-500"
+      >
+        ⋯
+      </button>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1 rounded border border-zinc-200 p-2">
+      <p className="text-[11px] text-zinc-500">
+        この行の歌詞（原文）を修正します。過去の結果は変わらず、次回以降の採点から反映されます。
+      </p>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        maxLength={500}
+        className="w-full rounded border border-zinc-300 px-2 py-1 text-base focus:outline-none sm:text-sm"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+      />
+      <div className="flex items-center gap-3 text-xs">
+        <button
+          disabled={saving || !draft.trim()}
+          onClick={async () => {
+            setSaving(true);
+            setError(null);
+            try {
+              await onSave(draft);
+              setOpen(false);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "エラーが発生しました");
+            } finally {
+              setSaving(false);
+            }
+          }}
+          className="rounded-full bg-zinc-900 px-3 py-1 text-white disabled:opacity-40"
+        >
+          {saving ? "保存中..." : "保存"}
+        </button>
+        <button onClick={() => setOpen(false)} className="text-zinc-500 underline decoration-dotted">
+          キャンセル
+        </button>
+        {error && <span className="text-red-600">{error}</span>}
+      </div>
+    </div>
   );
 }
 
