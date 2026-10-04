@@ -804,7 +804,7 @@ function ResultView({
                             {item.ref}
                           </span>
                           {item.status !== "match" && item.status !== "optional" && (
-                            <span className="px-1 text-[10px] text-zinc-500">
+                            <span className="px-1 text-sm text-zinc-500">
                               {item.user ?? "—"}
                             </span>
                           )}
