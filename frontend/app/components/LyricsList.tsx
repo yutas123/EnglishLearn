@@ -44,6 +44,8 @@ type PopupState =
       ipa: string | null;
       explanation: string | null;
       isExisting: boolean;
+      // 複数語選択で「まとまりで覚える価値が低い」と判定されたときの、鍵となる1語
+      coreWord: string | null;
     }
   | {
       mode: "registered";
@@ -347,16 +349,17 @@ export default function LyricsList({
     }
   }
 
-  async function handlePreviewRegister() {
+  async function handlePreviewRegister(override?: { text: string; isPhrase: boolean }) {
     if (!selection || !BACKEND_URL) return;
+    const target = override ?? { text: selection.text, isPhrase: selection.isPhrase };
     setPopup({ mode: "loading", action: "preview" });
     try {
       const res = await fetch(`${BACKEND_URL}/api/vocab/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          term: selection.text,
-          isPhrase: selection.isPhrase,
+          term: target.text,
+          isPhrase: target.isPhrase,
           trackId,
           lineIndex: selection.lineIndex,
         }),
@@ -372,6 +375,7 @@ export default function LyricsList({
         ipa: data.ipa,
         explanation: lastExplanation,
         isExisting: data.isExisting,
+        coreWord: data.coreWord ?? null,
       });
     } catch (err) {
       setPopup({
@@ -379,6 +383,12 @@ export default function LyricsList({
         message: err instanceof Error ? err.message : "エラーが発生しました",
       });
     }
+  }
+
+  // 「まとまりで覚える価値が低い」と判定された複数語選択を、鍵となる1語の登録に切り替える
+  function handleSwitchToCoreWord(coreWord: string) {
+    setSelection((s) => (s ? { ...s, text: coreWord, isPhrase: false } : s));
+    handlePreviewRegister({ text: coreWord, isPhrase: false });
   }
 
   async function handleConfirmRegister() {
@@ -515,7 +525,7 @@ export default function LyricsList({
                 詳しく!
               </button>
               <button
-                onClick={handlePreviewRegister}
+                onClick={() => handlePreviewRegister()}
                 className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
               >
                 📔 登録
@@ -543,7 +553,7 @@ export default function LyricsList({
               <p className="break-words leading-relaxed text-zinc-700">{popup.text}</p>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handlePreviewRegister}
+                  onClick={() => handlePreviewRegister()}
                   className="w-fit rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-50"
                 >
                   📔 登録
@@ -581,12 +591,30 @@ export default function LyricsList({
                   {popup.explanation}
                 </p>
               )}
+              {popup.coreWord && (
+                <div className="flex flex-col gap-1.5 rounded bg-amber-50 p-2">
+                  <p className="text-xs text-amber-800">
+                    これは決まった慣用表現ではなく、通常の文法の組み合わせです。つまずきの原因は
+                    「{popup.coreWord}」の意味かもしれません。
+                  </p>
+                  <button
+                    onClick={() => handleSwitchToCoreWord(popup.coreWord!)}
+                    className="w-fit rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                  >
+                    「{popup.coreWord}」を登録する
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleConfirmRegister}
-                  className="w-fit rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+                  className={
+                    popup.coreWord
+                      ? "w-fit rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
+                      : "w-fit rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+                  }
                 >
-                  登録する
+                  {popup.coreWord ? "フレーズのまま登録する" : "登録する"}
                 </button>
                 <button
                   onClick={closePopup}

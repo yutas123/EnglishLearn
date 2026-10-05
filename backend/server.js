@@ -331,6 +331,8 @@ app.post("/api/vocab/preview", async (req, res) => {
       partOfSpeech: result.partOfSpeech,
       cefr: result.cefr,
       ipa: result.ipa,
+      phraseType: result.phraseType,
+      coreWord: result.coreWord,
       isExisting: false,
       costUsd: result.costUsd,
     });

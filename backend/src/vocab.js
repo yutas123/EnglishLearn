@@ -27,6 +27,21 @@ export async function lemmatizeAndDefine(
     ? `"ipa"には必ずnullを入れてください（複数語からなる熟語・イディオムには発音記号を付けません）。`
     : `"ipa"には、その単語のアメリカ英語での発音記号を国際音声記号(IPA)で、スラッシュ込みで返してください（例: "though"→"/ðoʊ/"）。`;
 
+  const phraseTypeInstruction = isPhrase
+    ? `
+【まとまりで覚える価値の判定】複数語の選択は、必ずしもイディオムではありません。"phraseType"に次のいずれかを入れてください。
+- "idiom": 各語の意味から全体の意味が推測できない慣用表現（例: break a leg, kick the bucket）
+- "fixed": 句動詞・決まった連語など、一まとまりで覚えた方がよい組み合わせ（例: look forward to, give up）
+- "free": 通常の文法で語を組み合わせただけで、まとまりで覚える価値が低いもの（例: leave it all, eat an apple）。つまずきの原因は個々の語（特に多義語・基本動詞）の語義にあると考えられるもの
+"phraseType"が"free"の場合のみ、"coreWord"に、学習者が意味を理解できていない可能性が最も高い語を、選択された表現に現れる形のまま1語で入れてください（例: "Leave it all" → "Leave"）。それ以外の場合は"coreWord"はnullにしてください。`
+    : "";
+
+  const phraseTypeFields = isPhrase
+    ? `,
+  "phraseType": "idiom | fixed | free",
+  "coreWord": "phraseTypeがfreeのときのみ、鍵となる1語。それ以外はnull"`
+    : "";
+
   const prompt = `【英語学習：単語帳登録用の情報抽出】
 
 以下は歌詞から学習者が選択した表現です。この表現について情報を抽出してください。
@@ -38,6 +53,7 @@ export async function lemmatizeAndDefine(
 ${normalizationInstruction}
 
 ${ipaInstruction}
+${phraseTypeInstruction}
 
 この表現はこの曲以外の歌詞でも同じ語として単語帳に登録され、他の曲では別の文脈で使われます。
 "meaning"には、この行だけの意訳ではなく、辞書に載っているような、どの文脈でも通用する一般的な意味を書いてください
@@ -47,9 +63,9 @@ ${ipaInstruction}
 {
   "term": "登録用の表記",
   "meaning": "一般的な(辞書的な)日本語の意味（簡潔に、文脈依存の意訳は避ける）",
-  "partOfSpeech": "品詞（熟語・イディオムの場合は「イディオム」）",
+  "partOfSpeech": "品詞（複数語の場合: phraseTypeがidiomなら「イディオム」、fixedなら「句動詞」「連語」など、freeなら「フレーズ」）",
   "cefr": "A1〜C2のいずれか（判断が難しい場合はnull）",
-  "ipa": "発音記号（単語の場合のみ。熟語・イディオムの場合はnull）"
+  "ipa": "発音記号（単語の場合のみ。複数語の場合はnull）"${phraseTypeFields}
 }`;
 
   let lastError;
@@ -84,6 +100,13 @@ ${ipaInstruction}
         partOfSpeech: parsed.partOfSpeech ? String(parsed.partOfSpeech).trim() : null,
         cefr: parsed.cefr ? String(parsed.cefr).trim() : null,
         ipa: !isPhrase && parsed.ipa ? String(parsed.ipa).trim() : null,
+        phraseType: isPhrase && ["idiom", "fixed", "free"].includes(parsed.phraseType)
+          ? parsed.phraseType
+          : null,
+        coreWord:
+          isPhrase && parsed.phraseType === "free" && parsed.coreWord
+            ? String(parsed.coreWord).trim()
+            : null,
         costUsd,
       };
     } catch (error) {
