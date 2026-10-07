@@ -20,6 +20,7 @@ import {
   explainDictationMistake,
 } from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
+import { searchStudioAlbums } from "./src/musicbrainz.js";
 import { translateAndSaveTrack } from "./src/jobs.js";
 import { translateLyrics } from "./src/translator.js";
 import {
@@ -168,6 +169,168 @@ app.post("/api/jobs/from-genius", async (req, res) => {
     });
 
     res.json({ jobId: job.id, artistName, albumName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---- アーティストの公式スタジオアルバムをまとめて登録 ----
+
+const BULK_MAX_ALBUMS = 10; // 1回の登録上限（OpenAI費用とZenRows無料枠の保護）
+const normalizeName = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+const stripThe = (s) => normalizeName(s).replace(/^the/, "");
+
+/**
+ * GET /api/bulk/artist-albums?artist=... — MusicBrainzから公式スタジオアルバム一覧を取得し、
+ * 登録済み（またはジョブ進行中）のものに印を付けて返す。DB書き込み・AI呼び出しなし。
+ */
+app.get("/api/bulk/artist-albums", async (req, res) => {
+  try {
+    const artist = typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+    if (artist.length < 1) {
+      return res.status(400).json({ error: "artist は必須です" });
+    }
+
+    const { artistName, albums } = await searchStudioAlbums(artist);
+
+    const [dbAlbums, activeJobs] = await Promise.all([
+      prisma.album.findMany({ select: { artistName: true, albumTitle: true } }),
+      prisma.job.findMany({
+        where: { status: { in: ["pending", "running"] } },
+        select: { artistName: true, albumName: true },
+      }),
+    ]);
+    const known = [
+      ...dbAlbums.map((d) => ({ artist: d.artistName, title: d.albumTitle })),
+      ...activeJobs.map((j) => ({ artist: j.artistName, title: j.albumName })),
+    ];
+
+    res.json({
+      artistName,
+      albums: albums.map((a) => ({
+        ...a,
+        registered: known.some(
+          (k) => stripThe(k.artist) === stripThe(artistName) && normalizeName(k.title) === normalizeName(a.title)
+        ),
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/bulk/resolve?artist=...&title=... — MusicBrainzのアルバム1枚に対応するGeniusアルバムを探し、
+ * 確認画面用にトラックリストを返す。見つからなければ genius: null。DB書き込み・AI呼び出しなし。
+ */
+app.get("/api/bulk/resolve", async (req, res) => {
+  try {
+    if (!GENIUS_ACCESS_TOKEN) {
+      return res.status(500).json({ error: "GENIUS_ACCESS_TOKEN が設定されていません" });
+    }
+    const artist = typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+    const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
+    if (!artist || !title) {
+      return res.status(400).json({ error: "artist / title は必須です" });
+    }
+
+    // 版違い（Deluxe等）を誤って拾わないよう、アーティスト名・アルバム名が正規化後に完全一致する候補だけ採用する
+    // スクレイピング代行経由の検索は時々一時的に失敗するため、数回までリトライする
+    let candidates;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        candidates = await searchAlbums(`${artist} ${title}`);
+        break;
+      } catch (error) {
+        if (attempt >= 2) throw error;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    const match = candidates.find(
+      (c) => stripThe(c.artistName) === stripThe(artist) && normalizeName(c.name) === normalizeName(title)
+    );
+    if (!match) {
+      return res.json({ genius: null });
+    }
+
+    const [detail, tracks] = await Promise.all([
+      getAlbumDetail(match.id, GENIUS_ACCESS_TOKEN),
+      getAlbumTracks(match.id, GENIUS_ACCESS_TOKEN),
+    ]);
+    if (!detail || tracks.length === 0) {
+      return res.json({ genius: null });
+    }
+
+    // Genius側の正式名で既に登録済みかも確認する（MusicBrainzの表記と微妙に違う場合の保険）
+    const registered = !!(await prisma.album.findFirst({
+      where: {
+        artistName: { equals: detail.artistName, mode: "insensitive" },
+        albumTitle: { equals: detail.name, mode: "insensitive" },
+      },
+      select: { id: true },
+    }));
+
+    res.json({ genius: { ...detail, tracks }, registered });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/bulk-from-genius — 確認画面で選んだGeniusアルバムを、まとめてジョブとして登録する
+ * body: { albums: [{ geniusAlbumId, artistName, albumName }] }（最大 BULK_MAX_ALBUMS 件）
+ * 登録済みのアルバムは自動でスキップし、ジョブ進行中のものは既存ジョブを返す。ワーカーは1件ずつ順次処理する。
+ */
+app.post("/api/jobs/bulk-from-genius", async (req, res) => {
+  try {
+    const albums = Array.isArray(req.body?.albums) ? req.body.albums : [];
+    if (albums.length === 0) {
+      return res.status(400).json({ error: "albums は1件以上必要です" });
+    }
+    if (albums.length > BULK_MAX_ALBUMS) {
+      return res.status(400).json({ error: `一度に登録できるのは最大${BULK_MAX_ALBUMS}枚です` });
+    }
+    if (albums.some((a) => !a?.geniusAlbumId || !a?.artistName || !a?.albumName)) {
+      return res.status(400).json({ error: "geniusAlbumId / artistName / albumName は必須です" });
+    }
+
+    const jobs = [];
+    const skipped = [];
+    for (const { geniusAlbumId, artistName, albumName } of albums) {
+      const exists = await prisma.album.findFirst({
+        where: {
+          artistName: { equals: artistName, mode: "insensitive" },
+          albumTitle: { equals: albumName, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (exists) {
+        skipped.push({ albumName, reason: "登録済み" });
+        continue;
+      }
+
+      const existingJob = await prisma.job.findFirst({
+        where: { artistName, albumName, status: { in: ["pending", "running"] } },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existingJob) {
+        jobs.push({ jobId: existingJob.id, albumName });
+        continue;
+      }
+
+      const job = await prisma.job.create({
+        data: {
+          type: "album",
+          artistName,
+          albumName,
+          status: "pending",
+          geniusAlbumId: String(geniusAlbumId),
+        },
+      });
+      jobs.push({ jobId: job.id, albumName });
+    }
+
+    res.json({ jobs, skipped });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

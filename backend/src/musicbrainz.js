@@ -23,6 +23,57 @@ export function parseReleaseDate(date) {
   return formatReleaseDate(y, m, d);
 }
 
+const MB_HEADERS = { "User-Agent": "notion-music-db/1.0 ( example@email.com )" };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const normalizeName = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * アーティスト名から、公式スタジオアルバム（リリースグループ）の一覧を古い順に返す。
+ * primary-type が Album で、ライブ・コンピレーション・サウンドトラック等の secondary-type を持たないものだけ。
+ * 版違い（デラックス盤等）はリリースグループに束ねられるため、アルバム1枚=1件になる。
+ * @returns {{ artistName: string, albums: { mbid: string, title: string, releaseDate: string|null }[] }}
+ */
+export async function searchStudioAlbums(artistName) {
+  const artistQuery = encodeURIComponent(`artist:"${artistName.replace(/"/g, "")}"`);
+  const artistRes = await fetch(`${BASE_URL}/artist/?query=${artistQuery}&fmt=json&limit=5`, {
+    headers: MB_HEADERS,
+  });
+  if (!artistRes.ok) {
+    throw new Error(`MusicBrainzのアーティスト検索に失敗しました (status ${artistRes.status})`);
+  }
+  const artists = (await artistRes.json()).artists ?? [];
+  if (artists.length === 0) throw new Error("アーティストが見つかりませんでした");
+
+  // 完全一致を優先し、なければ検索スコア最上位を使う
+  const artist = artists.find((a) => normalizeName(a.name) === normalizeName(artistName)) ?? artists[0];
+
+  const groups = [];
+  for (let offset = 0; offset < 300; offset += 100) {
+    await sleep(1100); // MusicBrainzは1リクエスト/秒の制限
+    const res = await fetch(
+      `${BASE_URL}/release-group?artist=${artist.id}&type=album&limit=100&offset=${offset}&fmt=json`,
+      { headers: MB_HEADERS }
+    );
+    if (!res.ok) {
+      throw new Error(`MusicBrainzのアルバム一覧取得に失敗しました (status ${res.status})`);
+    }
+    const data = await res.json();
+    groups.push(...(data["release-groups"] ?? []));
+    if (offset + 100 >= (data["release-group-count"] ?? 0)) break;
+  }
+
+  const albums = groups
+    .filter((g) => g["primary-type"] === "Album" && (g["secondary-types"] ?? []).length === 0)
+    .map((g) => ({
+      mbid: g.id,
+      title: g.title,
+      releaseDate: parseReleaseDate(g["first-release-date"]),
+    }))
+    .sort((a, b) => (a.releaseDate ?? "9999").localeCompare(b.releaseDate ?? "9999"));
+
+  return { artistName: artist.name, albums };
+}
+
 /**
  * アーティスト名 + アルバム名から Release ID を取得（オリジナル版優先）
  */

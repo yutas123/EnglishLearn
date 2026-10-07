@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import AlbumGrid from "./components/AlbumGrid";
 import AddCurrentTrackButton from "./components/AddCurrentTrackButton";
 import AddFromGeniusButton from "./components/AddFromGeniusButton";
+import BulkAddButton from "./components/BulkAddButton";
 
 export const revalidate = 3600;
 
@@ -18,6 +19,7 @@ export default async function HomePage() {
         <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
           <AddCurrentTrackButton />
           <AddFromGeniusButton />
+          <BulkAddButton />
         </div>
       </header>
 
