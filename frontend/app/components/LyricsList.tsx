@@ -156,6 +156,20 @@ export default function LyricsList({
     text: null,
   });
   const [currentSectionLabel, setCurrentSectionLabel] = useState<string | null>(null);
+  const [flashLineIndex, setFlashLineIndex] = useState<number | null>(null);
+
+  // 検索結果から #line-N 付きで遷移してきたとき、その行へスクロールして一瞬ハイライトする
+  useEffect(() => {
+    const match = window.location.hash.match(/^#line-(\d+)$/);
+    if (!match) return;
+    const lineIndex = Number(match[1]);
+    document
+      .getElementById(`line-${lineIndex}`)
+      ?.scrollIntoView({ block: "center" });
+    setFlashLineIndex(lineIndex);
+    const timer = setTimeout(() => setFlashLineIndex(null), 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Spotifyでこのページの曲が再生中なら、再生位置÷曲の長さを行数に按分して
   // 「だいたい今このセクション」を推定する（行/秒単位の正確な同期ではなく、あくまで目安）
@@ -465,9 +479,12 @@ export default function LyricsList({
         return (
         <div
           key={line.id}
+          id={`line-${line.lineIndex}`}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className={`flex flex-col gap-1 py-3 ${
+          className={`flex scroll-mt-20 flex-col gap-1 py-3 transition-colors duration-700 ${
+            flashLineIndex === line.lineIndex ? "bg-amber-100" : ""
+          } ${
             isNewSection ? "border-t border-zinc-200 pt-4" : ""
           }`}
         >
