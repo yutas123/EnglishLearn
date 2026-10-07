@@ -14,7 +14,8 @@ model Album {
   releaseId   String? // MusicBrainz Release ID
   coverArtUrl String?
   geniusUrl   String?
-  releaseYear Int? // リリース年（一覧のソート用。取得できなかった旧データはnull）
+  releaseYear Int? // リリース年（表示用。取得できなかった旧データはnull）
+  releaseDate String? // リリース日 YYYY-MM-DD（月日が不明なら YYYY / YYYY-MM。同年内の並び順用）
   isFavorite  Boolean  @default(false) // お気に入り（一覧上部にピン留め）
   createdAt   DateTime @default(now())
   tracks      Track[]

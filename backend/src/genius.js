@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { SCRAPER_API_KEY, ZENROWS_API_KEY } from "./config.js";
+import { formatReleaseDate } from "./musicbrainz.js";
 
 const GENIUS_API_URL = "https://api.genius.com";
 const MAX_RETRIES = 3;
@@ -400,6 +401,11 @@ export async function getAlbumDetail(albumId, accessToken) {
     coverArtUrl: album.cover_art_url ?? null,
     url: album.url,
     releaseYear: album.release_date_components?.year ?? null,
+    releaseDate: formatReleaseDate(
+      album.release_date_components?.year,
+      album.release_date_components?.month,
+      album.release_date_components?.day
+    ),
   };
 }
 

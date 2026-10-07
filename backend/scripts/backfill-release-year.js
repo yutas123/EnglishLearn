@@ -1,9 +1,9 @@
-// releaseYearが未設定の既存アルバムに対して、リリース年を取得して埋める一回限りのスクリプト。
+// releaseYear / releaseDate が未設定の既存アルバムに対して、リリース年・リリース日を取得して埋める一回限りのスクリプト。
 // Genius検索→アルバム詳細のrelease_date_componentsから取得し、取れなければMusicBrainzのリリース日を使う。
 // 使い方: node scripts/backfill-release-year.js
 import { prisma } from "../src/db.js";
 import { GENIUS_ACCESS_TOKEN } from "../src/config.js";
-import { parseReleaseYear } from "../src/musicbrainz.js";
+import { parseReleaseYear, parseReleaseDate } from "../src/musicbrainz.js";
 import { searchAlbums, getAlbumDetail } from "../src/genius.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,7 +16,7 @@ async function yearFromMusicBrainz(releaseId) {
   if (!res.ok) return null;
   const data = await res.json();
   await sleep(1100); // MusicBrainzは1リクエスト/秒の制限
-  return parseReleaseYear(data.date);
+  return { year: parseReleaseYear(data.date), date: parseReleaseDate(data.date) };
 }
 
 async function yearFromGenius(album) {
@@ -28,27 +28,35 @@ async function yearFromGenius(album) {
   );
   if (!match) return null;
   const detail = await getAlbumDetail(match.id, GENIUS_ACCESS_TOKEN);
-  return detail?.releaseYear ?? null;
+  return detail ? { year: detail.releaseYear ?? null, date: detail.releaseDate ?? null } : null;
 }
 
 async function main() {
-  const albums = await prisma.album.findMany({ where: { releaseYear: null } });
-  console.log(`🔍 リリース年未設定のアルバム: ${albums.length}件`);
+  const albums = await prisma.album.findMany({ where: { OR: [{ releaseYear: null }, { releaseDate: null }] } });
+  console.log(`🔍 リリース年/日未設定のアルバム: ${albums.length}件`);
 
   for (const album of albums) {
     console.log(`\n--- ${album.artistName} - ${album.albumTitle} ---`);
     try {
       // MusicBrainz側は「最古のオフィシャル版」を選ぶ都合で再発盤の年になることがある（例: Pet Sounds→1972）
       // ため、オリジナルの発売日を持つGeniusを優先し、見つからなければMusicBrainzにフォールバックする
-      let year = await yearFromGenius(album).catch(() => null);
-      if (!year && album.releaseId) year = await yearFromMusicBrainz(album.releaseId);
+      let found = await yearFromGenius(album).catch(() => null);
+      if (!found?.year && album.releaseId) found = await yearFromMusicBrainz(album.releaseId);
 
-      if (!year) {
+      if (!found?.year) {
         console.log("⚠️ 見つかりませんでした");
         continue;
       }
-      await prisma.album.update({ where: { id: album.id }, data: { releaseYear: year } });
-      console.log(`✅ ${year}`);
+      // 既存の年と食い違う（再発盤の日付を拾った可能性がある）場合は、年を上書きせず日付も採用しない
+      if (album.releaseYear && album.releaseYear !== found.year) {
+        console.log(`⚠️ 既存の年(${album.releaseYear})と一致しないためスキップ: ${found.date ?? found.year}`);
+        continue;
+      }
+      await prisma.album.update({
+        where: { id: album.id },
+        data: { releaseYear: found.year, releaseDate: found.date },
+      });
+      console.log(`✅ ${found.date ?? found.year}`);
     } catch (error) {
       console.log(`⚠️ 取得に失敗: ${error.message}`);
     }

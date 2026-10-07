@@ -34,6 +34,7 @@ export default async function HomePage() {
             coverArtUrl: a.coverArtUrl,
             trackCount: a._count.tracks,
             releaseYear: a.releaseYear,
+            releaseDate: a.releaseDate,
             isFavorite: a.isFavorite,
           }))}
         />

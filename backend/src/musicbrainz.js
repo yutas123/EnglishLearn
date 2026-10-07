@@ -6,6 +6,23 @@ export function parseReleaseYear(date) {
   return Number.isInteger(year) && year > 0 ? year : null;
 }
 
+/** 年・月・日（不明なら省略）から YYYY / YYYY-MM / YYYY-MM-DD 形式の文字列を作る。年が不明ならnull */
+export function formatReleaseDate(year, month, day) {
+  if (!Number.isInteger(year) || year <= 0) return null;
+  let text = String(year).padStart(4, "0");
+  if (Number.isInteger(month) && month >= 1 && month <= 12) {
+    text += `-${String(month).padStart(2, "0")}`;
+    if (Number.isInteger(day) && day >= 1 && day <= 31) text += `-${String(day).padStart(2, "0")}`;
+  }
+  return text;
+}
+
+/** MusicBrainzの日付文字列（YYYY / YYYY-MM / YYYY-MM-DD）をリリース日の保存形式に正規化する */
+export function parseReleaseDate(date) {
+  const [y, m, d] = String(date ?? "").split("-").map(Number);
+  return formatReleaseDate(y, m, d);
+}
+
 /**
  * アーティスト名 + アルバム名から Release ID を取得（オリジナル版優先）
  */
@@ -48,6 +65,7 @@ export async function searchRelease(artist, album) {
     releaseGroupId: release["release-group"]?.id ?? null,
     albumTitle: release.title,
     releaseYear: parseReleaseYear(release.date),
+    releaseDate: parseReleaseDate(release.date),
   };
 }
 

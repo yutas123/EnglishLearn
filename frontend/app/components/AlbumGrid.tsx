@@ -11,8 +11,15 @@ type Album = {
   coverArtUrl: string | null;
   trackCount: number;
   releaseYear: number | null;
+  releaseDate: string | null; // YYYY-MM-DD（月日が不明なら YYYY / YYYY-MM）
   isFavorite: boolean;
 };
+
+// 同じ年の中でも日付順に並べるためのキー。日付が不明なら年で代用し、年も不明なものは最後に回す。
+// "1967" < "1967-06" < "1967-06-01" と文字列比較で自然に並ぶ
+function releaseSortKey(a: Album): string {
+  return a.releaseDate ?? (a.releaseYear ? String(a.releaseYear).padStart(4, "0") : "￿");
+}
 
 function AlbumCard({ album, showArtist }: { album: Album; showArtist: boolean }) {
   const meta = [
@@ -69,7 +76,7 @@ export default function AlbumGrid({ albums }: { albums: Album[] }) {
   const favorites = useMemo(() => filtered.filter((a) => a.isFavorite), [filtered]);
 
   // albumsは追加日の新しい順で渡されるため、アーティストの並びは「最近追加したアーティスト順」。
-  // 各アーティスト内はリリース年の古い順（ディスコグラフィー順）で、年が不明なものは最後に回す
+  // 各アーティスト内はリリース日の古い順（ディスコグラフィー順）で、年が不明なものは最後に回す
   const groups = useMemo(() => {
     const map = new Map<string, Album[]>();
     for (const a of filtered) {
@@ -78,7 +85,11 @@ export default function AlbumGrid({ albums }: { albums: Album[] }) {
       map.set(a.artistName, list);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => (a.releaseYear ?? Infinity) - (b.releaseYear ?? Infinity));
+      list.sort((a, b) => {
+        const ka = releaseSortKey(a);
+        const kb = releaseSortKey(b);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
     }
     return [...map.entries()];
   }, [filtered]);
