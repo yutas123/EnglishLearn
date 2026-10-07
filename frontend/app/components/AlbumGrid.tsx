@@ -99,7 +99,7 @@ export default function AlbumGrid({ albums }: { albums: Album[] }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="アルバム名・アーティスト名で絞り込み"
-        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-500"
+        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-base outline-none focus:border-zinc-500"
       />
 
       {favorites.length > 0 && (

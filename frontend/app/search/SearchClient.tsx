@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { SEARCH_FOCUS_HELPER_ID } from "../components/SearchLink";
 
 type Result = {
   trackId: string;
@@ -38,8 +39,15 @@ export default function SearchClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchedQuery, setSearchedQuery] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const trimmed = query.trim();
+
+  // 🔍ボタンのタップ時に用意された画面外の入力欄からフォーカスを引き継ぐ（iOSでキーボードを維持するため）
+  useEffect(() => {
+    textareaRef.current?.focus();
+    document.getElementById(SEARCH_FOCUS_HELPER_ID)?.remove();
+  }, []);
 
   useEffect(() => {
     if (trimmed.length < 2) {
@@ -84,8 +92,8 @@ export default function SearchClient() {
         onChange={(e) => setQuery(e.target.value.replace(/\n/g, " "))}
         placeholder="歌詞の中から単語・熟語を検索（2文字以上）"
         rows={2}
-        autoFocus
-        className="w-full resize-none rounded-lg border border-zinc-300 p-3 text-sm outline-none focus:border-zinc-500"
+        ref={textareaRef}
+        className="w-full resize-none rounded-lg border border-zinc-300 p-3 text-base outline-none focus:border-zinc-500"
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
