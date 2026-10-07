@@ -142,7 +142,7 @@ export async function processAlbum(jobId, artistName, albumName) {
     await log(`🔍 MusicBrainz 検索中: ${artistName} - ${albumName}`);
 
     // ① Release検索
-    const { releaseId, releaseGroupId, albumTitle } = await searchRelease(artistName, albumName);
+    const { releaseId, releaseGroupId, albumTitle, releaseYear } = await searchRelease(artistName, albumName);
     await log(`🎯 Release確定: ${albumTitle} (ID: ${releaseId})`);
 
     // 既に同一アルバムが登録済みなら再生成せずそのまま完了扱いにする
@@ -172,7 +172,7 @@ export async function processAlbum(jobId, artistName, albumName) {
 
     // ④ アルバムをDBに作成
     const album = await prisma.album.create({
-      data: { artistName, albumTitle, releaseId, coverArtUrl, geniusUrl },
+      data: { artistName, albumTitle, releaseId, coverArtUrl, geniusUrl, releaseYear },
     });
     await updateJob(jobId, { albumId: album.id });
     await log(`📀 アルバム作成完了: ${albumTitle}`);
@@ -238,7 +238,7 @@ export async function processAlbumFromGenius(jobId, geniusAlbumId) {
       throw new Error("Geniusのトラックリストが空です");
     }
 
-    const { artistName, name: albumTitle, coverArtUrl: geniusCoverArtUrl, url: geniusUrl } = albumDetail;
+    const { artistName, name: albumTitle, coverArtUrl: geniusCoverArtUrl, url: geniusUrl, releaseYear } = albumDetail;
     await log(`🎯 アルバム確定: ${artistName} - ${albumTitle}`);
 
     // 既に同一アルバムが登録済みの場合、全曲そろっていればそのまま完了扱いにする。
@@ -284,7 +284,7 @@ export async function processAlbumFromGenius(jobId, geniusAlbumId) {
       await log(coverArtUrl ? `🖼️ ジャケット画像を取得` : `⚠️ ジャケット画像が見つかりません`);
 
       album = await prisma.album.create({
-        data: { artistName, albumTitle, releaseId: null, coverArtUrl, geniusUrl },
+        data: { artistName, albumTitle, releaseId: null, coverArtUrl, geniusUrl, releaseYear },
       });
       await updateJob(jobId, { albumId: album.id });
       await log(`📀 アルバム作成完了: ${albumTitle}`);

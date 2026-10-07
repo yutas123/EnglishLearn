@@ -1,5 +1,11 @@
 const BASE_URL = "https://musicbrainz.org/ws/2";
 
+/** MusicBrainzの日付文字列（YYYY / YYYY-MM / YYYY-MM-DD）から年を取り出す */
+export function parseReleaseYear(date) {
+  const year = Number(String(date ?? "").slice(0, 4));
+  return Number.isInteger(year) && year > 0 ? year : null;
+}
+
 /**
  * アーティスト名 + アルバム名から Release ID を取得（オリジナル版優先）
  */
@@ -41,6 +47,7 @@ export async function searchRelease(artist, album) {
     releaseId: release.id,
     releaseGroupId: release["release-group"]?.id ?? null,
     albumTitle: release.title,
+    releaseYear: parseReleaseYear(release.date),
   };
 }
 

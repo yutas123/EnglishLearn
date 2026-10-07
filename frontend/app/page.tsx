@@ -33,6 +33,8 @@ export default async function HomePage() {
             albumTitle: a.albumTitle,
             coverArtUrl: a.coverArtUrl,
             trackCount: a._count.tracks,
+            releaseYear: a.releaseYear,
+            isFavorite: a.isFavorite,
           }))}
         />
       )}

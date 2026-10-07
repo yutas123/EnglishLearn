@@ -399,6 +399,7 @@ export async function getAlbumDetail(albumId, accessToken) {
     artistName: album.artist?.name ?? album.primary_artist_names ?? "",
     coverArtUrl: album.cover_art_url ?? null,
     url: album.url,
+    releaseYear: album.release_date_components?.year ?? null,
   };
 }
 

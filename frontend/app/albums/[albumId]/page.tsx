@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import FavoriteAlbumButton from "../../components/FavoriteAlbumButton";
 
 export const revalidate = 3600;
 
@@ -41,7 +42,10 @@ export default async function AlbumPage({
         </div>
         <div className="flex flex-col justify-center gap-1">
           <h1 className="text-xl font-bold">{album.albumTitle}</h1>
-          <p className="text-sm text-zinc-500">{album.artistName}</p>
+          <p className="text-sm text-zinc-500">
+            {album.artistName}
+            {album.releaseYear ? ` · ${album.releaseYear}` : ""}
+          </p>
           {album.geniusUrl && (
             <a
               href={album.geniusUrl}
@@ -55,21 +59,27 @@ export default async function AlbumPage({
         </div>
       </div>
 
-      <ol className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200">
-        {album.tracks.map((track) => (
-          <li key={track.id}>
-            <Link
-              href={`/tracks/${track.id}`}
-              className="flex items-center gap-3 px-4 py-3 text-sm transition hover:bg-zinc-50"
-            >
-              <span className="w-6 text-right text-zinc-400">
-                {track.trackNo}
-              </span>
-              <span className="flex-1">{track.title}</span>
-            </Link>
-          </li>
-        ))}
-      </ol>
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-600">楽曲一覧</h2>
+          <FavoriteAlbumButton albumId={album.id} initialIsFavorite={album.isFavorite} />
+        </div>
+        <ol className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200">
+          {album.tracks.map((track) => (
+            <li key={track.id}>
+              <Link
+                href={`/tracks/${track.id}`}
+                className="flex items-center gap-3 px-4 py-3 text-sm transition hover:bg-zinc-50"
+              >
+                <span className="w-6 text-right text-zinc-400">
+                  {track.trackNo}
+                </span>
+                <span className="flex-1">{track.title}</span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </section>
     </main>
   );
 }
