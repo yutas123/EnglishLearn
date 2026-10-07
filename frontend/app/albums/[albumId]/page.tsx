@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import FavoriteAlbumButton from "../../components/FavoriteAlbumButton";
+import DeleteAlbumButton from "../../components/DeleteAlbumButton";
 
 export const revalidate = 3600;
 
@@ -80,6 +81,10 @@ export default async function AlbumPage({
           ))}
         </ol>
       </section>
+
+      <footer className="mt-6 border-t border-zinc-100 pt-4">
+        <DeleteAlbumButton albumId={album.id} albumTitle={album.albumTitle} />
+      </footer>
     </main>
   );
 }
