@@ -126,6 +126,82 @@ ${phraseTypeInstruction}
 }
 
 /**
+ * 選択された単語（1〜2語）のコアイメージと、その行での働き・訳し方をAIで解説
+ * @param {{ selectedText: string, lineOriginal: string, lineTranslation: string }} input
+ * @param {string} apiKey
+ * @returns {{ coreImage: string, roleInLine: string, translation: string, costUsd: number }}
+ */
+export async function explainCoreImage(
+  { selectedText, lineOriginal, lineTranslation },
+  apiKey
+) {
+  const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
+
+  const prompt = `【英語学習：コアイメージ解説】
+
+英語学習者が、以下の行の中の単語を選択し、その単語の「コアイメージ」を知りたがっています。
+
+行全体（原文）: "${lineOriginal}"
+行全体の日本語訳: "${lineTranslation}"
+学習者が選択した単語: "${selectedText}"
+
+次の3項目を、日本語で簡潔に書いてください。
+- coreImage: その単語が持つ根本的なイメージ（辞書の複数の意味に共通する感覚）を、1〜2文（60文字程度）で。前置詞・基本動詞ならイメージを図で描くように。
+- roleInLine: このコアイメージが、この行でどう働いているか（60文字程度）。
+- translation: その結果、この文脈ではどう訳せるか。行全体の訳との対応が分かるように（60文字程度）。
+
+以下のJSON形式で出力してください：
+{"coreImage": "...", "roleInLine": "...", "translation": "..."}`;
+
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        reasoning_effort: "low",
+        messages: [
+          {
+            role: "system",
+            content:
+              "あなたは英語のコアイメージ（単語の根本的な意味の感覚）を教える英語学習アシスタントです。簡潔で分かりやすい解説をJSON形式で提供してください。",
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0].message.content;
+      const parsed = JSON.parse(content);
+      const costUsd = calcCostUsd(response.usage);
+
+      if (!parsed.coreImage || !parsed.roleInLine || !parsed.translation) {
+        throw new Error(`予期しないレスポンス形式: ${content.substring(0, 200)}`);
+      }
+
+      return {
+        coreImage: String(parsed.coreImage).trim(),
+        roleInLine: String(parsed.roleInLine).trim(),
+        translation: String(parsed.translation).trim(),
+        costUsd,
+      };
+    } catch (error) {
+      lastError = error;
+      const isTimeout = error.code === "ETIMEDOUT" || error.message.includes("timeout");
+      const isRetryable = isTimeout || error.status === 429 || error.status >= 500;
+
+      if (attempt < MAX_RETRIES && isRetryable) {
+        await sleep(attempt * 3000);
+        continue;
+      }
+      break;
+    }
+  }
+
+  throw lastError;
+}
+
+/**
  * 選択された表現が、その行の対訳になぜ繋がるのかをAIで解説
  * @param {{ selectedText: string, lineOriginal: string, lineTranslation: string }} input
  * @param {string} apiKey

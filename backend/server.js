@@ -12,7 +12,7 @@ import {
   playTrack,
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
-import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
+import { lemmatizeAndDefine, explainSpan, explainCoreImage } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
 import {
   evaluateDictation,
@@ -718,6 +718,60 @@ app.post("/api/vocab/explain", async (req, res) => {
     });
 
     res.json({ explanation, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/vocab/core-image — 選択単語のコアイメージ・この行での働き・訳し方をAIで解説（結果はキャッシュ）
+ * body: { trackId, lineIndex, selectedText }
+ */
+app.post("/api/vocab/core-image", async (req, res) => {
+  try {
+    const { trackId, lineIndex, selectedText } = req.body;
+
+    if (!trackId || typeof lineIndex !== "number" || !selectedText) {
+      return res.status(400).json({ error: "trackId / lineIndex / selectedText は必須です" });
+    }
+
+    const cached = await prisma.coreImageNote.findUnique({
+      where: {
+        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
+      },
+    });
+
+    if (cached) {
+      return res.json({
+        coreImage: cached.coreImage,
+        roleInLine: cached.roleInLine,
+        translation: cached.translation,
+        costUsd: 0,
+        cached: true,
+      });
+    }
+
+    const line = await prisma.translation.findFirst({
+      where: { trackId, lineIndex },
+    });
+    if (!line) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { coreImage, roleInLine, translation, costUsd } = await explainCoreImage(
+      { selectedText, lineOriginal: line.original, lineTranslation: line.translation },
+      OPENAI_API_KEY
+    );
+
+    await prisma.coreImageNote.create({
+      data: { trackId, lineIndex, selectedText, coreImage, roleInLine, translation },
+    });
+
+    res.json({ coreImage, roleInLine, translation, costUsd, cached: false });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

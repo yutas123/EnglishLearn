@@ -33,8 +33,9 @@ type Selection = {
 
 type PopupState =
   | { mode: "menu" }
-  | { mode: "loading"; action: "explain" | "preview" | "register" | "delete" }
+  | { mode: "loading"; action: "explain" | "coreImage" | "preview" | "register" | "delete" }
   | { mode: "explanation"; text: string }
+  | { mode: "coreImage"; coreImage: string; roleInLine: string; translation: string }
   | {
       mode: "confirm";
       term: string;
@@ -363,6 +364,35 @@ export default function LyricsList({
     }
   }
 
+  async function handleCoreImage() {
+    if (!selection || !BACKEND_URL) return;
+    setPopup({ mode: "loading", action: "coreImage" });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/vocab/core-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId,
+          lineIndex: selection.lineIndex,
+          selectedText: selection.text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "コアイメージの取得に失敗しました");
+      setPopup({
+        mode: "coreImage",
+        coreImage: data.coreImage,
+        roleInLine: data.roleInLine,
+        translation: data.translation,
+      });
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
   async function handlePreviewRegister(override?: { text: string; isPhrase: boolean }) {
     if (!selection || !BACKEND_URL) return;
     const target = override ?? { text: selection.text, isPhrase: selection.isPhrase };
@@ -541,6 +571,14 @@ export default function LyricsList({
               >
                 詳しく!
               </button>
+              {selection.text.trim().split(/\s+/).length <= 2 && (
+                <button
+                  onClick={handleCoreImage}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
+                >
+                  🧠 コア
+                </button>
+              )}
               <button
                 onClick={() => handlePreviewRegister()}
                 className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
@@ -559,6 +597,7 @@ export default function LyricsList({
           {popup.mode === "loading" && (
             <p className="text-xs text-zinc-500">
               {popup.action === "explain" && "解説を生成中..."}
+              {popup.action === "coreImage" && "コアイメージを生成中..."}
               {popup.action === "preview" && "登録内容を確認中..."}
               {popup.action === "register" && "登録中..."}
               {popup.action === "delete" && "削除中..."}
@@ -568,6 +607,39 @@ export default function LyricsList({
           {popup.mode === "explanation" && (
             <>
               <p className="break-words leading-relaxed text-zinc-700">{popup.text}</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handlePreviewRegister()}
+                  className="w-fit rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-50"
+                >
+                  📔 登録
+                </button>
+                <button
+                  onClick={closePopup}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  閉じる
+                </button>
+              </div>
+            </>
+          )}
+
+          {popup.mode === "coreImage" && (
+            <>
+              <div className="flex flex-col gap-1.5 leading-relaxed text-zinc-700">
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">🧠 コアイメージ</span>
+                  {popup.coreImage}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この行での働き</span>
+                  {popup.roleInLine}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この文脈での訳し方</span>
+                  {popup.translation}
+                </p>
+              </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => handlePreviewRegister()}
