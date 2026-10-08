@@ -176,7 +176,7 @@ async function CoreImageTab() {
                 term={entry.term}
                 version={entry.illustration?.createdAt.getTime() ?? null}
               />
-              <p className="break-words rounded bg-violet-50 p-3 text-sm leading-relaxed text-zinc-700">
+              <p className="break-words rounded bg-pink-50 p-3 text-sm leading-relaxed text-zinc-700">
                 {entry.coreImage}
               </p>
               <ul className="flex flex-col divide-y divide-zinc-100">
