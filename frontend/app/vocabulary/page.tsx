@@ -1,15 +1,21 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import OccurrencesPanel from "./components/OccurrencesPanel";
+import CoreIllustration from "./components/CoreIllustration";
 
 const PAGE_SIZE = 30;
 
 export default async function VocabularyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string }>;
 }) {
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, tab } = await searchParams;
+
+  if (tab === "core") {
+    return <CoreImageTab />;
+  }
+
   const page = Math.max(1, Number(pageParam) || 1);
   const skip = (page - 1) * PAGE_SIZE;
 
@@ -32,6 +38,7 @@ export default async function VocabularyPage({
 
   return (
     <main className="flex flex-col gap-6">
+      <Tabs active="vocab" />
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-bold">📔 単語帳</h1>
         <div className="flex items-center gap-3">
@@ -103,6 +110,96 @@ export default async function VocabularyPage({
             <span />
           )}
         </nav>
+      )}
+    </main>
+  );
+}
+
+function Tabs({ active }: { active: "vocab" | "core" }) {
+  const base = "rounded-full px-4 py-1.5 text-xs font-medium";
+  const on = "bg-zinc-900 text-white";
+  const off = "border border-zinc-300 hover:bg-zinc-50";
+  return (
+    <nav className="flex gap-2">
+      <Link href="/vocabulary" className={`${base} ${active === "vocab" ? on : off}`}>
+        📔 単語
+      </Link>
+      <Link href="/vocabulary?tab=core" className={`${base} ${active === "core" ? on : off}`}>
+        🧠 コアイメージ
+      </Link>
+    </nav>
+  );
+}
+
+// 知っているはずの平易な語が「別の用法」で出てきて訳せなかったものを貯める箱
+async function CoreImageTab() {
+  const entries = await prisma.coreImageEntry.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      illustration: { select: { createdAt: true } },
+      usages: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          track: {
+            select: { id: true, title: true, album: { select: { albumTitle: true } } },
+          },
+        },
+      },
+    },
+  });
+
+  return (
+    <main className="flex flex-col gap-6">
+      <Tabs active="core" />
+      <header className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">🧠 コアイメージ</h1>
+        <span className="text-sm text-zinc-500">{entries.length}語</span>
+      </header>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          まだ保存された語がありません。歌詞ページで知っているはずの単語を選び、「🧠 コア」→「🧠 保存」してみてください。
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-4">
+          {entries.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4"
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-semibold">{entry.term}</span>
+                <span className="text-xs text-zinc-400">{entry.usages.length}件の用法</span>
+              </div>
+              <CoreIllustration
+                entryId={entry.id}
+                term={entry.term}
+                version={entry.illustration?.createdAt.getTime() ?? null}
+              />
+              <p className="break-words rounded bg-violet-50 p-3 text-sm leading-relaxed text-zinc-700">
+                {entry.coreImage}
+              </p>
+              <ul className="flex flex-col divide-y divide-zinc-100">
+                {entry.usages.map((usage) => (
+                  <li key={usage.id} className="flex flex-col gap-1 py-2 text-sm">
+                    <p className="break-words text-zinc-700">
+                      <span className="font-medium">{usage.selectedText}</span>
+                      <span className="text-zinc-400"> — </span>
+                      {usage.translation}
+                    </p>
+                    <p className="break-words text-xs text-zinc-500">{usage.roleInLine}</p>
+                    <Link
+                      href={`/tracks/${usage.track.id}#line-${usage.lineIndex}`}
+                      className="w-fit text-xs text-zinc-400 hover:underline"
+                    >
+                      🎵 {usage.track.album.albumTitle} - {usage.track.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
       )}
     </main>
   );

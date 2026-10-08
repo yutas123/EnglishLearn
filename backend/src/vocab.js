@@ -129,7 +129,7 @@ ${phraseTypeInstruction}
  * 選択された単語（1〜2語）のコアイメージと、その行での働き・訳し方をAIで解説
  * @param {{ selectedText: string, lineOriginal: string, lineTranslation: string }} input
  * @param {string} apiKey
- * @returns {{ coreImage: string, roleInLine: string, translation: string, costUsd: number }}
+ * @returns {{ lemma: string | null, coreImage: string, roleInLine: string, translation: string, costUsd: number }}
  */
 export async function explainCoreImage(
   { selectedText, lineOriginal, lineTranslation },
@@ -146,12 +146,13 @@ export async function explainCoreImage(
 学習者が選択した単語: "${selectedText}"
 
 次の3項目を、日本語で簡潔に書いてください。
+- lemma: 選択単語の原形（小文字。活用形なら辞書の見出し語、2語の場合は句動詞などそのまま小文字で）。
 - coreImage: その単語が持つ根本的なイメージ（辞書の複数の意味に共通する感覚）を、1〜2文（60文字程度）で。前置詞・基本動詞ならイメージを図で描くように。
 - roleInLine: このコアイメージが、この行でどう働いているか（60文字程度）。
 - translation: その結果、この文脈ではどう訳せるか。行全体の訳との対応が分かるように（60文字程度）。
 
 以下のJSON形式で出力してください：
-{"coreImage": "...", "roleInLine": "...", "translation": "..."}`;
+{"lemma": "...", "coreImage": "...", "roleInLine": "...", "translation": "..."}`;
 
   let lastError;
 
@@ -180,6 +181,7 @@ export async function explainCoreImage(
       }
 
       return {
+        lemma: parsed.lemma ? String(parsed.lemma).trim().toLowerCase() : null,
         coreImage: String(parsed.coreImage).trim(),
         roleInLine: String(parsed.roleInLine).trim(),
         translation: String(parsed.translation).trim(),

@@ -37,6 +37,7 @@ model Track {
   vocabOccurrences  VocabOccurrence[]
   spanExplanations  SpanExplanation[]
   coreImageNotes    CoreImageNote[]
+  coreImageUsages   CoreImageUsage[]
   listeningMarks    ListeningMark[]
   dictationAttempts DictationAttempt[]
   lineNotes         TrackLineNote[]
@@ -117,6 +118,7 @@ model CoreImageNote {
   coreImage    String // その語のコアイメージ
   roleInLine   String // この行での働き
   translation  String // この文脈での訳し方
+  lemma        String? // 選択語の原形（コアイメージ帳への保存時の見出し語）
   createdAt    DateTime @default(now())
 
   @@unique([trackId, lineIndex, selectedText])
@@ -184,4 +186,42 @@ model Job {
   costUsd         Float    @default(0) // OpenAI API利用の累計コスト（ドル）
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// コアイメージ帳（語ごとに1件。語を知っているのに訳せない「別の用法」を貯める箱）
+model CoreImageEntry {
+  id        String   @id @default(cuid())
+  term      String   @unique // 原形（小文字）
+  coreImage String // その語のコアイメージ（最初に保存した時点の文面で固定）
+  createdAt DateTime @default(now())
+
+  usages       CoreImageUsage[]
+  illustration CoreImageIllustration?
+}
+
+// 出会った用法（曲・行・選択テキスト単位）
+model CoreImageUsage {
+  id           String         @id @default(cuid())
+  entryId      String
+  entry        CoreImageEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  trackId      String
+  track        Track          @relation(fields: [trackId], references: [id])
+  lineIndex    Int
+  selectedText String
+  roleInLine   String
+  translation  String
+  createdAt    DateTime       @default(now())
+
+  @@unique([trackId, lineIndex, selectedText])
+  @@index([trackId])
+  @@index([entryId])
+}
+
+// イラスト本体は一覧クエリで読み込まないよう別テーブルに分離
+model CoreImageIllustration {
+  entryId   String         @id
+  entry     CoreImageEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  data      Bytes
+  mimeType  String
+  createdAt DateTime       @default(now())
 }
