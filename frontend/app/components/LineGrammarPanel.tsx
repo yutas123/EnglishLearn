@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -20,15 +20,16 @@ export type ChatMessage = {
 export default function LineGrammarPanel({
   trackId,
   lineIndex,
+  open,
   initialGrammar,
   initialMessages,
 }: {
   trackId: string;
   lineIndex: number;
+  open: boolean;
   initialGrammar: Grammar | null;
   initialMessages: ChatMessage[];
 }) {
-  const [open, setOpen] = useState(false);
   const [grammar, setGrammar] = useState<Grammar | null>(initialGrammar);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +58,11 @@ export default function LineGrammarPanel({
     }
   }
 
-  function handleToggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && !grammar) generate(false);
-  }
+  // 開いた時に未生成なら生成する（生成済みならキャッシュ表示のみ）
+  useEffect(() => {
+    if (open && !grammar) generate(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   async function handleSend() {
     const message = input.trim();
@@ -85,18 +86,12 @@ export default function LineGrammarPanel({
     }
   }
 
-  return (
-    <div className="ml-1 text-sm text-zinc-500">
-      <button
-        onClick={handleToggle}
-        className="w-fit text-xs text-zinc-500 underline decoration-dotted hover:text-zinc-700"
-      >
-        {open ? "🧩 文法解説を閉じる" : grammar ? "🧩 文法解説を開く" : "🧩 文法を解体する"}
-        {!open && messages.length > 0 && ` (💬${Math.ceil(messages.length / 2)})`}
-      </button>
+  if (!open) return null;
 
-      {open && (
-        <div className="mt-2 flex flex-col gap-3 rounded-lg border border-zinc-200 p-3">
+  return (
+    <div className="text-sm text-zinc-500">
+      {(
+        <div className="mt-1 flex flex-col gap-3 rounded-lg border border-zinc-200 p-3">
           {loading && !grammar && <p className="text-xs">文法を分解中...</p>}
           {error && <p className="text-xs text-red-600">{error}</p>}
 

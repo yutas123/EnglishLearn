@@ -36,6 +36,8 @@ export async function DELETE(
     prisma.highlight.deleteMany({ where: trackFilter }),
     prisma.spanExplanation.deleteMany({ where: trackFilter }),
     prisma.listeningMark.deleteMany({ where: trackFilter }),
+    prisma.lineGrammar.deleteMany({ where: trackFilter }),
+    prisma.lineChatMessage.deleteMany({ where: trackFilter }),
     prisma.dictationAttempt.deleteMany({ where: trackFilter }),
     prisma.trackLineNote.deleteMany({ where: trackFilter }),
     prisma.track.deleteMany({ where: { albumId } }),
