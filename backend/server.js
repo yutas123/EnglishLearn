@@ -15,6 +15,7 @@ import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan, explainCoreImage } from "./src/vocab.js";
 import { generateIllustration } from "./src/illustration.js";
 import { explainListeningDifficulty } from "./src/listening.js";
+import { explainLineGrammar, chatAboutLine } from "./src/grammar.js";
 import {
   evaluateDictation,
   evaluateDictationGroups,
@@ -1084,6 +1085,133 @@ app.post("/api/listening/explain", async (req, res) => {
     });
 
     res.json({ explanation, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 解説対象の行と前後の行（文が行をまたぐ場合の文脈）を取得する
+ */
+async function getLineWithContext(trackId, lineIndex, radius = 3) {
+  const rows = await prisma.translation.findMany({
+    where: { trackId, lineIndex: { gte: lineIndex - radius, lte: lineIndex + radius } },
+    orderBy: { lineIndex: "asc" },
+  });
+  const target = rows.find((r) => r.lineIndex === lineIndex);
+  if (!target) return null;
+  return {
+    target,
+    contextLines: rows.map((r) => ({ original: r.original, isTarget: r.lineIndex === lineIndex })),
+  };
+}
+
+/**
+ * POST /api/listening/grammar — 行の文法分解をAIで生成（結果はキャッシュ、regenerate:true で作り直し）
+ * body: { trackId, lineIndex, regenerate? }
+ */
+app.post("/api/listening/grammar", async (req, res) => {
+  try {
+    const { trackId, lineIndex, regenerate } = req.body;
+    if (!trackId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "trackId / lineIndex は必須です" });
+    }
+
+    const ctx = await getLineWithContext(trackId, lineIndex);
+    if (!ctx) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    const cached = await prisma.lineGrammar.findUnique({
+      where: { trackId_lineIndex: { trackId, lineIndex } },
+    });
+    // 歌詞が修正されて原文が変わっていたら、キャッシュは使わず作り直す
+    if (cached && !regenerate && cached.original === ctx.target.original) {
+      return res.json({ grammar: cached.content, costUsd: 0, cached: true });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { content, costUsd } = await explainLineGrammar(
+      { contextLines: ctx.contextLines, lineTranslation: ctx.target.translation },
+      OPENAI_API_KEY
+    );
+
+    await prisma.lineGrammar.upsert({
+      where: { trackId_lineIndex: { trackId, lineIndex } },
+      create: { trackId, lineIndex, original: ctx.target.original, content },
+      update: { original: ctx.target.original, content },
+    });
+
+    res.json({ grammar: content, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/listening/chat — 行の文法解説について追加で質問する（履歴は行ごとにDB保存）
+ * body: { trackId, lineIndex, message }
+ */
+app.post("/api/listening/chat", async (req, res) => {
+  try {
+    const { trackId, lineIndex } = req.body;
+    const message = typeof req.body.message === "string" ? req.body.message.trim() : "";
+    if (!trackId || typeof lineIndex !== "number" || !message) {
+      return res.status(400).json({ error: "trackId / lineIndex / message は必須です" });
+    }
+    if (message.length > 1000) {
+      return res.status(400).json({ error: "メッセージは1000文字以内にしてください" });
+    }
+
+    const ctx = await getLineWithContext(trackId, lineIndex);
+    if (!ctx) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const [grammarRow, historyDesc] = await Promise.all([
+      prisma.lineGrammar.findUnique({ where: { trackId_lineIndex: { trackId, lineIndex } } }),
+      prisma.lineChatMessage.findMany({
+        where: { trackId, lineIndex },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+    const history = historyDesc.reverse();
+
+    const { reply, costUsd } = await chatAboutLine(
+      {
+        contextLines: ctx.contextLines,
+        grammar: grammarRow?.content ?? null,
+        history,
+        message,
+      },
+      OPENAI_API_KEY
+    );
+
+    // AI呼び出しが成功した時だけ保存する（失敗時に質問だけ残る状態を避ける）
+    const now = Date.now();
+    const [userMsg, assistantMsg] = await prisma.$transaction([
+      prisma.lineChatMessage.create({
+        data: { trackId, lineIndex, role: "user", content: message, createdAt: new Date(now) },
+      }),
+      prisma.lineChatMessage.create({
+        data: { trackId, lineIndex, role: "assistant", content: reply, createdAt: new Date(now + 1) },
+      }),
+    ]);
+
+    res.json({
+      messages: [
+        { id: userMsg.id, role: "user", content: userMsg.content },
+        { id: assistantMsg.id, role: "assistant", content: assistantMsg.content },
+      ],
+      costUsd,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

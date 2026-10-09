@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import LineGrammarPanel, { type ChatMessage, type Grammar } from "./LineGrammarPanel";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -12,6 +13,8 @@ type Line = {
   sectionLabel: string | null;
   isMarked: boolean;
   explanation: string | null;
+  grammar: Grammar | null;
+  chatMessages: ChatMessage[];
 };
 
 export default function ListeningLines({
@@ -141,6 +144,13 @@ export default function ListeningLines({
               {isMarked && <span className="mr-1">👂</span>}
               {line.original}
             </button>
+
+            <LineGrammarPanel
+              trackId={trackId}
+              lineIndex={line.lineIndex}
+              initialGrammar={line.grammar}
+              initialMessages={line.chatMessages}
+            />
 
             {isMarked && (
               <details className="ml-1 text-sm text-zinc-500">

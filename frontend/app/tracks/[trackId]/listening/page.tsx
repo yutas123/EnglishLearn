@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import ListeningLines from "../../../components/ListeningLines";
+import type { Grammar } from "../../../components/LineGrammarPanel";
 
 export const revalidate = 0;
 
@@ -12,7 +13,7 @@ export default async function ListeningPage({
 }) {
   const { trackId } = await params;
 
-  const [track, marks] = await Promise.all([
+  const [track, marks, grammars, chatMessages] = await Promise.all([
     prisma.track.findUnique({
       where: { id: trackId },
       include: {
@@ -21,6 +22,8 @@ export default async function ListeningPage({
       },
     }),
     prisma.listeningMark.findMany({ where: { trackId } }),
+    prisma.lineGrammar.findMany({ where: { trackId } }),
+    prisma.lineChatMessage.findMany({ where: { trackId }, orderBy: { createdAt: "asc" } }),
   ]);
 
   if (!track) {
@@ -28,8 +31,10 @@ export default async function ListeningPage({
   }
 
   const markByLineIndex = new Map(marks.map((m) => [m.lineIndex, m]));
+  const grammarByLineIndex = new Map(grammars.map((g) => [g.lineIndex, g]));
   const lines = track.translations.map((line) => {
     const mark = markByLineIndex.get(line.lineIndex);
+    const grammar = grammarByLineIndex.get(line.lineIndex);
     return {
       id: line.id,
       lineIndex: line.lineIndex,
@@ -38,6 +43,14 @@ export default async function ListeningPage({
       sectionLabel: line.sectionLabel,
       isMarked: Boolean(mark),
       explanation: mark?.explanation ?? null,
+      // 歌詞の原文が後から修正されていたら、古い解説は出さない（開き直すと作り直される）
+      grammar:
+        grammar && grammar.original === line.original
+          ? (grammar.content as unknown as Grammar)
+          : null,
+      chatMessages: chatMessages
+        .filter((m) => m.lineIndex === line.lineIndex)
+        .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })),
     };
   });
 
@@ -61,7 +74,7 @@ export default async function ListeningPage({
 
       <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
         対訳は表示されません。Spotifyで聴きながら、聞き取れなかった行をタップしてマークしてください。
-        マークした行は下の「🔎 確認する」から訳と解説を見られます。
+        マークした行は下の「🔎 確認する」から訳と解説を見られます。各行の「🧩 文法を解体する」で文法解説（訳を含みます）とAIへの質問ができます。
       </p>
 
       {lines.length === 0 ? (

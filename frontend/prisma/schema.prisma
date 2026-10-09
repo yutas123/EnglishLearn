@@ -39,6 +39,8 @@ model Track {
   coreImageNotes    CoreImageNote[]
   coreImageUsages   CoreImageUsage[]
   listeningMarks    ListeningMark[]
+  lineGrammars      LineGrammar[]
+  lineChatMessages  LineChatMessage[]
   dictationAttempts DictationAttempt[]
   lineNotes         TrackLineNote[]
   createdAt         DateTime           @default(now())
@@ -133,6 +135,32 @@ model ListeningMark {
   createdAt   DateTime @default(now())
 
   @@unique([trackId, lineIndex])
+}
+
+// 行ごとの文法解体解説のキャッシュ（リスニングモード）
+model LineGrammar {
+  id        String   @id @default(cuid())
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  lineIndex Int
+  original  String // 生成時点の原文（歌詞修正後のずれ検知用）
+  content   Json // { translation, skeleton, chunks: [{text, role, note}], points: string[] }
+  createdAt DateTime @default(now())
+
+  @@unique([trackId, lineIndex])
+}
+
+// 行ごとの文法チャット履歴（永続化）
+model LineChatMessage {
+  id        String   @id @default(cuid())
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  lineIndex Int
+  role      String // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([trackId, lineIndex, createdAt])
 }
 
 model DictationAttempt {
