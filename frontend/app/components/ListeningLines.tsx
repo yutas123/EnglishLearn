@@ -71,10 +71,12 @@ export default function ListeningLines({
 }) {
   const [shownTranslations, setShownTranslations] = useState<Set<number>>(new Set());
   const [openGrammar, setOpenGrammar] = useState<Set<number>>(new Set());
-  // 解説（またはチャット）が一度でもできた行。閉じていても色で分かるようにする
+  // 解説（またはチャット）が一度でもできた文（文の先頭行のlineIndex）。閉じていても色で分かるようにする
   const [generatedLines, setGeneratedLines] = useState<Set<number>>(
     () => new Set(lines.filter((l) => l.grammar || l.chatMessages.length > 0).map((l) => l.lineIndex))
   );
+  // 文の先頭行（文法解説・チャットのデータはここに載っている）
+  const unitStartLine = new Map(lines.map((l) => [l.sentenceStart ?? l.lineIndex, l]));
 
   function markGenerated(lineIndex: number, generated: boolean) {
     setGeneratedLines((prev) => {
@@ -117,7 +119,8 @@ export default function ListeningLines({
           ? `${isSentenceStart ? "pt-2.5" : "pt-0.5"} ${isSentenceEnd ? "pb-2.5" : "pb-0.5"}`
           : "py-2.5";
         const showTranslation = shownTranslations.has(sentenceKey);
-        const showGrammar = openGrammar.has(line.lineIndex);
+        const showGrammar = openGrammar.has(sentenceKey);
+        const unitHead = unitStartLine.get(sentenceKey) ?? line;
 
         return (
           <div
@@ -152,20 +155,24 @@ export default function ListeningLines({
                 ) : (
                   <span className="h-7 w-7" aria-hidden />
                 )}
-                <IconButton
-                  active={showGrammar}
-                  done={generatedLines.has(line.lineIndex)}
-                  label={
-                    showGrammar
-                      ? "解説を閉じる"
-                      : generatedLines.has(line.lineIndex)
-                        ? "解説を開く（生成済み）"
-                        : "この行について質問・文法解説"
-                  }
-                  onClick={() => toggle(setOpenGrammar, line.lineIndex)}
-                >
-                  <PuzzleIcon />
-                </IconButton>
+                {isSentenceStart ? (
+                  <IconButton
+                    active={showGrammar}
+                    done={generatedLines.has(sentenceKey)}
+                    label={
+                      showGrammar
+                        ? "解説を閉じる"
+                        : generatedLines.has(sentenceKey)
+                          ? "解説を開く（生成済み）"
+                          : "この文について質問・文法解説"
+                    }
+                    onClick={() => toggle(setOpenGrammar, sentenceKey)}
+                  >
+                    <PuzzleIcon />
+                  </IconButton>
+                ) : (
+                  <span className="h-7 w-7" aria-hidden />
+                )}
               </div>
             </div>
 
@@ -173,14 +180,17 @@ export default function ListeningLines({
               <p className="break-words text-sm text-zinc-500">{line.translation}</p>
             )}
 
-            <LineGrammarPanel
-              trackId={trackId}
-              lineIndex={line.lineIndex}
-              open={showGrammar}
-              initialGrammar={line.grammar}
-              initialMessages={line.chatMessages}
-              onGeneratedChange={(g) => markGenerated(line.lineIndex, g)}
-            />
+            {/* 文法解説は1文につき1つ。対訳と同じく文の最終行の下に出す */}
+            {isSentenceEnd && (
+              <LineGrammarPanel
+                trackId={trackId}
+                lineIndex={sentenceKey}
+                open={showGrammar}
+                initialGrammar={unitHead.grammar}
+                initialMessages={unitHead.chatMessages}
+                onGeneratedChange={(g) => markGenerated(sentenceKey, g)}
+              />
+            )}
           </div>
         );
       })}

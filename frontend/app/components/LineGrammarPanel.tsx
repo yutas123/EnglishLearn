@@ -139,7 +139,7 @@ export default function LineGrammarPanel({
           )}
 
           <div className={`flex flex-col gap-2 ${grammar ? "border-t border-zinc-100 pt-3" : ""}`}>
-              <div className="text-xs font-semibold">💬 この行についてAIに質問</div>
+              <div className="text-xs font-semibold">💬 この文についてAIに質問</div>
 
               {messages.map((m) => (
                 <div

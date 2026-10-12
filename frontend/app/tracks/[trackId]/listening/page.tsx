@@ -30,8 +30,16 @@ export default async function ListeningPage({
   }
 
   const grammarByLineIndex = new Map(grammars.map((g) => [g.lineIndex, g]));
+  // 文法解説・チャットは1文につき1つ（文の先頭行のlineIndexで保存）。文の原文は全行を改行でつないだもの
+  const unitOriginals = new Map<number, string[]>();
+  for (const line of track.translations) {
+    const key = line.sentenceStart ?? line.lineIndex;
+    unitOriginals.set(key, [...(unitOriginals.get(key) ?? []), line.original]);
+  }
   const lines = track.translations.map((line) => {
-    const grammar = grammarByLineIndex.get(line.lineIndex);
+    const unitKey = line.sentenceStart ?? line.lineIndex;
+    const isUnitStart = unitKey === line.lineIndex;
+    const grammar = isUnitStart ? grammarByLineIndex.get(line.lineIndex) : undefined;
     return {
       id: line.id,
       lineIndex: line.lineIndex,
@@ -41,12 +49,14 @@ export default async function ListeningPage({
       sectionLabel: line.sectionLabel,
       // 歌詞の原文が後から修正されていたら、古い解説は出さない（開き直すと作り直される）
       grammar:
-        grammar && grammar.original === line.original
+        grammar && grammar.original === (unitOriginals.get(unitKey) ?? []).join("\n")
           ? (grammar.content as unknown as Grammar)
           : null,
-      chatMessages: chatMessages
-        .filter((m) => m.lineIndex === line.lineIndex)
-        .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })),
+      chatMessages: isUnitStart
+        ? chatMessages
+            .filter((m) => m.lineIndex === line.lineIndex)
+            .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content }))
+        : [],
     };
   });
 
@@ -70,7 +80,7 @@ export default async function ListeningPage({
 
       <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
         Spotifyで聴きながら使うページです。各行の右の <span className="font-semibold">≡</span> で対訳を表示、
-        <span className="font-semibold"> パズル</span> で文法解説とAIへの質問ができます。
+        <span className="font-semibold"> パズル</span> で文ごとの文法解説とAIへの質問ができます。
       </p>
 
       {lines.length === 0 ? (

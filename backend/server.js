@@ -1091,18 +1091,38 @@ app.post("/api/listening/explain", async (req, res) => {
 });
 
 /**
- * 解説対象の行と前後の行（文が行をまたぐ場合の文脈）を取得する
+ * 解説対象の文（複数行にまたがる文はその全行）と前後の行（文脈）を取得する。
+ * 文法解説・チャットは「文の先頭行のlineIndex」をキーにして1文につき1つ持つ。
+ * 渡されたlineIndexが文の途中の行でも、先頭行に読み替える。
+ * @returns {{ target: object, unitStart: number, unitOriginal: string, contextLines: Array<{original: string, isTarget: boolean}> } | null}
  */
 async function getLineWithContext(trackId, lineIndex, radius = 3) {
+  const line = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
+  if (!line) return null;
+  const unitStart = line.sentenceStart ?? line.lineIndex;
+
+  // 文の範囲: 先頭行から、同じsentenceStartが続く最後の行まで（sentenceStartがnullの古いデータは1行1文）
+  const unitRows =
+    line.sentenceStart == null
+      ? [line]
+      : await prisma.translation.findMany({
+          where: { trackId, sentenceStart: unitStart },
+          orderBy: { lineIndex: "asc" },
+        });
+  const unitEnd = unitRows[unitRows.length - 1].lineIndex;
   const rows = await prisma.translation.findMany({
-    where: { trackId, lineIndex: { gte: lineIndex - radius, lte: lineIndex + radius } },
+    where: { trackId, lineIndex: { gte: unitStart - radius, lte: unitEnd + radius } },
     orderBy: { lineIndex: "asc" },
   });
-  const target = rows.find((r) => r.lineIndex === lineIndex);
-  if (!target) return null;
+  const target = rows.find((r) => r.lineIndex === unitStart) ?? unitRows[0];
   return {
     target,
-    contextLines: rows.map((r) => ({ original: r.original, isTarget: r.lineIndex === lineIndex })),
+    unitStart,
+    unitOriginal: unitRows.map((r) => r.original).join("\n"),
+    contextLines: rows.map((r) => ({
+      original: r.original,
+      isTarget: r.lineIndex >= unitStart && r.lineIndex <= unitEnd,
+    })),
   };
 }
 
@@ -1122,11 +1142,13 @@ app.post("/api/listening/grammar", async (req, res) => {
       return res.status(404).json({ error: "対象の行が見つかりません" });
     }
 
+    // 文の途中の行が指定されても、保存は文の先頭行のlineIndexで行う
+    const key = { trackId, lineIndex: ctx.unitStart };
     const cached = await prisma.lineGrammar.findUnique({
-      where: { trackId_lineIndex: { trackId, lineIndex } },
+      where: { trackId_lineIndex: key },
     });
     // 歌詞が修正されて原文が変わっていたら、キャッシュは使わず作り直す
-    if (cached && !regenerate && cached.original === ctx.target.original) {
+    if (cached && !regenerate && cached.original === ctx.unitOriginal) {
       return res.json({ grammar: cached.content, costUsd: 0, cached: true });
     }
 
@@ -1140,9 +1162,9 @@ app.post("/api/listening/grammar", async (req, res) => {
     );
 
     await prisma.lineGrammar.upsert({
-      where: { trackId_lineIndex: { trackId, lineIndex } },
-      create: { trackId, lineIndex, original: ctx.target.original, content },
-      update: { original: ctx.target.original, content },
+      where: { trackId_lineIndex: key },
+      create: { ...key, original: ctx.unitOriginal, content },
+      update: { original: ctx.unitOriginal, content },
     });
 
     res.json({ grammar: content, costUsd, cached: false });
@@ -1174,10 +1196,11 @@ app.post("/api/listening/chat", async (req, res) => {
       return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
     }
 
+    const unitIndex = ctx.unitStart;
     const [grammarRow, historyDesc] = await Promise.all([
-      prisma.lineGrammar.findUnique({ where: { trackId_lineIndex: { trackId, lineIndex } } }),
+      prisma.lineGrammar.findUnique({ where: { trackId_lineIndex: { trackId, lineIndex: unitIndex } } }),
       prisma.lineChatMessage.findMany({
-        where: { trackId, lineIndex },
+        where: { trackId, lineIndex: unitIndex },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
@@ -1187,7 +1210,7 @@ app.post("/api/listening/chat", async (req, res) => {
     const { reply, costUsd } = await chatAboutLine(
       {
         contextLines: ctx.contextLines,
-        grammar: grammarRow?.content ?? null,
+        grammar: grammarRow && grammarRow.original === ctx.unitOriginal ? grammarRow.content : null,
         history,
         message,
       },
@@ -1198,10 +1221,10 @@ app.post("/api/listening/chat", async (req, res) => {
     const now = Date.now();
     const [userMsg, assistantMsg] = await prisma.$transaction([
       prisma.lineChatMessage.create({
-        data: { trackId, lineIndex, role: "user", content: message, createdAt: new Date(now) },
+        data: { trackId, lineIndex: unitIndex, role: "user", content: message, createdAt: new Date(now) },
       }),
       prisma.lineChatMessage.create({
-        data: { trackId, lineIndex, role: "assistant", content: reply, createdAt: new Date(now + 1) },
+        data: { trackId, lineIndex: unitIndex, role: "assistant", content: reply, createdAt: new Date(now + 1) },
       }),
     ]);
 

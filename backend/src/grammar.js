@@ -16,8 +16,8 @@ function isRetryable(error) {
 }
 
 /**
- * 歌詞1行を文法的に分解して解説する。
- * 歌詞は1文が複数行にまたがることが多いので、前後の行を文脈として渡す（解説対象は▶の行）。
+ * 歌詞の1文（複数行にまたがる場合はその全行）を文法的に分解して解説する。
+ * 前後の行を文脈として渡す（解説対象は▶の行）。
  * @param {{ contextLines: Array<{original: string, isTarget: boolean}>, lineTranslation: string }} input
  * @param {string} apiKey
  * @returns {{ content: {translation: string, skeleton: string, chunks: Array<{text: string, role: string, note: string}>, points: string[]}, costUsd: number }}
@@ -25,13 +25,13 @@ function isRetryable(error) {
 export async function explainLineGrammar({ contextLines, lineTranslation }, apiKey) {
   const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
 
-  const prompt = `【英語学習：歌詞1行の文法分解】
+  const prompt = `【英語学習：歌詞1文の文法分解】
 
-以下は洋楽の歌詞の一部です。▶が付いた行が解説対象で、前後の行は文脈（文が行をまたぐ場合の参考）です。
+以下は洋楽の歌詞の一部です。▶が付いた行（1行または複数行）が解説対象の1文で、前後の行は文脈です。
 
 ${formatContext(contextLines)}
 
-▶の行を含む文全体の既存の日本語訳（参考。複数行にまたがる文なら全体の訳）: "${lineTranslation}"
+▶の行全体の既存の日本語訳（参考）: "${lineTranslation}"
 
 ユーザーは洋楽の歌詞を精読しています。答えだけでなく「なぜそう読めるか」を、文の構造と文法の根拠から説明してください。
 扱う文法事項は限定せず、その文の理解に必要なものはすべて解説対象とします。
@@ -56,8 +56,8 @@ ${formatContext(contextLines)}
 ## JSONの各項目への割り当て
 - translation: 構造が分かる自然な日本語訳（既存訳を参考にしてよい）
 - skeleton: 手順1〜3の結果（文の区切り、省略・倒置の復元形、述語動詞とS・V・O・C・M・文型、前後の行との繋がり）を簡潔に
-- chunks: ▶の行だけを、意味のまとまり（句・節）に順に区切った配列（手順4）。入れ子にせず、重複させず、前後の行は含めない（text は原文の該当部分をそのまま。全てのchunkのtextを順に連結すると▶の行そのものになること）。内側の構造は note か points で説明する。role は「主語」「動詞」「目的語」「関係節」「副詞句」等の文法上の役割、note は短い補足（不要なら空文字）
-- points: 手順5〜9で該当したもののうち、この行の理解に特に重要なものを最大5個、重要な順に（1項目1ポイント）。skeleton や chunks の note と重複する内容は書かない。「手順3」のような手順番号は書かない。特になければ空配列
+- chunks: ▶の行全体を、意味のまとまり（句・節）に順に区切った配列（手順4）。入れ子にせず、重複させず、前後の行は含めない（text は原文の該当部分をそのまま。全てのchunkのtextを順に連結すると▶の行全体になること。行の区切りは無視してよい）。内側の構造は note か points で説明する。role は「主語」「動詞」「目的語」「関係節」「副詞句」等の文法上の役割、note は短い補足（不要なら空文字）
+- points: 手順5〜9で該当したもののうち、この文の理解に特に重要なものを最大5個、重要な順に（1項目1ポイント）。skeleton や chunks の note と重複する内容は書かない。「手順3」のような手順番号は書かない。特になければ空配列
 
 以下のJSON形式のみで出力してください：
 {"translation": "...", "skeleton": "...", "chunks": [{"text": "...", "role": "...", "note": "..."}], "points": ["..."]}`;
@@ -124,15 +124,15 @@ export async function chatAboutLine({ contextLines, grammar, history, message },
   const openai = new OpenAI({ apiKey, timeout: TIMEOUT_MS });
 
   const grammarText = grammar
-    ? `【この行の文法解説（学習者が読んでいるもの）】
+    ? `【この文の文法解説（学習者が読んでいるもの）】
 訳: ${grammar.translation}
 骨格: ${grammar.skeleton}
 区切り: ${grammar.chunks.map((c) => `[${c.text}]=${c.role}`).join(" / ")}
 ポイント: ${grammar.points.join(" / ") || "なし"}`
     : "";
 
-  const system = `あなたは英文法を日本語で丁寧に教える英語教師です。学習者は洋楽の歌詞の1行について文法解説を読み、分からない点を質問しています。
-質問には、解説対象の行（▶）を軸に、簡潔に（長くても300文字程度）日本語で答えてください。必要なら短い例文を添えてください。
+  const system = `あなたは英文法を日本語で丁寧に教える英語教師です。学習者は洋楽の歌詞の1文について文法解説を読み、分からない点を質問しています。
+質問には、解説対象の文（▶）を軸に、簡潔に（長くても300文字程度）日本語で答えてください。必要なら短い例文を添えてください。
 歌詞特有の崩れた文法や口語は、そうだと明示してください。文脈が足りず断定できないことは推測と明記してください。
 
 【歌詞の文脈】
