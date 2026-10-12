@@ -23,12 +23,15 @@ export default function LineGrammarPanel({
   open,
   initialGrammar,
   initialMessages,
+  onGeneratedChange,
 }: {
   trackId: string;
   lineIndex: number;
   open: boolean;
   initialGrammar: Grammar | null;
   initialMessages: ChatMessage[];
+  // 解説またはチャットが1つでもできたか（親が閉じた状態でも「生成済み」を色で示すため）
+  onGeneratedChange?: (generated: boolean) => void;
 }) {
   const [grammar, setGrammar] = useState<Grammar | null>(initialGrammar);
   const [loading, setLoading] = useState(false);
@@ -58,11 +61,12 @@ export default function LineGrammarPanel({
     }
   }
 
-  // 開いた時に未生成なら生成する（生成済みならキャッシュ表示のみ）
+  // 解説の自動生成はしない。先にユーザーが質問し、必要なら「文法を解体する」ボタンで生成する
+  const hasContent = Boolean(grammar) || messages.length > 0;
   useEffect(() => {
-    if (open && !grammar) generate(false);
+    onGeneratedChange?.(hasContent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [hasContent]);
 
   async function handleSend() {
     const message = input.trim();
@@ -92,8 +96,7 @@ export default function LineGrammarPanel({
     <div className="text-sm text-zinc-500">
       {(
         <div className="mt-1 flex flex-col gap-3 rounded-lg border border-zinc-200 p-3">
-          {loading && !grammar && <p className="text-xs">文法を分解中...</p>}
-          {error && <p className="text-xs text-red-600">{error}</p>}
+                    {error && <p className="text-xs text-red-600">{error}</p>}
 
           {grammar && (
             <div className="flex flex-col gap-2.5 text-zinc-700">
@@ -135,8 +138,7 @@ export default function LineGrammarPanel({
             </div>
           )}
 
-          {grammar && (
-            <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
+          <div className={`flex flex-col gap-2 ${grammar ? "border-t border-zinc-100 pt-3" : ""}`}>
               <div className="text-xs font-semibold">💬 この行についてAIに質問</div>
 
               {messages.map((m) => (
@@ -160,7 +162,7 @@ export default function LineGrammarPanel({
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   rows={2}
-                  placeholder="例: ここの to はなぜ省略されているの？"
+                  placeholder="この文について聞きたいことを入力（例: ここの to はなぜ省略されているの？）"
                   className="min-w-0 flex-1 resize-none rounded border border-zinc-300 p-2 text-base"
                 />
                 <button
@@ -172,6 +174,15 @@ export default function LineGrammarPanel({
                 </button>
               </div>
             </div>
+
+          {!grammar && (
+            <button
+              onClick={() => generate(false)}
+              disabled={loading}
+              className="w-fit text-xs text-zinc-400 underline decoration-dotted hover:text-zinc-600 disabled:opacity-50"
+            >
+              {loading ? "文法を分解中..." : "🧩 文法を解体する（AIが自動で解説）"}
+            </button>
           )}
         </div>
       )}

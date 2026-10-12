@@ -32,11 +32,13 @@ function PuzzleIcon() {
 
 function IconButton({
   active,
+  done = false,
   label,
   onClick,
   children,
 }: {
   active: boolean;
+  done?: boolean;
   label: string;
   onClick: () => void;
   children: React.ReactNode;
@@ -48,7 +50,11 @@ function IconButton({
       aria-label={label}
       aria-pressed={active}
       className={`flex h-7 w-7 items-center justify-center rounded-md transition ${
-        active ? "bg-sky-100 text-sky-700" : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+        active
+          ? "bg-sky-100 text-sky-700"
+          : done
+            ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+            : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
       }`}
     >
       {children}
@@ -65,6 +71,20 @@ export default function ListeningLines({
 }) {
   const [shownTranslations, setShownTranslations] = useState<Set<number>>(new Set());
   const [openGrammar, setOpenGrammar] = useState<Set<number>>(new Set());
+  // 解説（またはチャット）が一度でもできた行。閉じていても色で分かるようにする
+  const [generatedLines, setGeneratedLines] = useState<Set<number>>(
+    () => new Set(lines.filter((l) => l.grammar || l.chatMessages.length > 0).map((l) => l.lineIndex))
+  );
+
+  function markGenerated(lineIndex: number, generated: boolean) {
+    setGeneratedLines((prev) => {
+      if (prev.has(lineIndex) === generated) return prev;
+      const next = new Set(prev);
+      if (generated) next.add(lineIndex);
+      else next.delete(lineIndex);
+      return next;
+    });
+  }
 
   function toggle(setter: typeof setShownTranslations, lineIndex: number) {
     setter((prev) => {
@@ -120,16 +140,28 @@ export default function ListeningLines({
             <div className="flex items-start justify-between gap-2">
               <p className="min-w-0 break-words font-medium leading-relaxed">{line.original}</p>
               <div className="flex shrink-0 items-center gap-0.5">
-                <IconButton
-                  active={showTranslation}
-                  label={showTranslation ? "対訳を閉じる" : "対訳を表示"}
-                  onClick={() => toggle(setShownTranslations, sentenceKey)}
-                >
-                  <TextIcon />
-                </IconButton>
+                {/* 複数行にまたがる文の対訳は同じ内容なので、先頭行のボタンだけにする */}
+                {isSentenceStart ? (
+                  <IconButton
+                    active={showTranslation}
+                    label={showTranslation ? "対訳を閉じる" : "対訳を表示"}
+                    onClick={() => toggle(setShownTranslations, sentenceKey)}
+                  >
+                    <TextIcon />
+                  </IconButton>
+                ) : (
+                  <span className="h-7 w-7" aria-hidden />
+                )}
                 <IconButton
                   active={showGrammar}
-                  label={showGrammar ? "文法解説を閉じる" : "文法を解体する"}
+                  done={generatedLines.has(line.lineIndex)}
+                  label={
+                    showGrammar
+                      ? "解説を閉じる"
+                      : generatedLines.has(line.lineIndex)
+                        ? "解説を開く（生成済み）"
+                        : "この行について質問・文法解説"
+                  }
                   onClick={() => toggle(setOpenGrammar, line.lineIndex)}
                 >
                   <PuzzleIcon />
@@ -147,6 +179,7 @@ export default function ListeningLines({
               open={showGrammar}
               initialGrammar={line.grammar}
               initialMessages={line.chatMessages}
+              onGeneratedChange={(g) => markGenerated(line.lineIndex, g)}
             />
           </div>
         );
