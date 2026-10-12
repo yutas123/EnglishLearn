@@ -31,7 +31,7 @@ export async function explainLineGrammar({ contextLines, lineTranslation }, apiK
 
 ${formatContext(contextLines)}
 
-▶の行の既存の日本語訳: "${lineTranslation}"
+▶の行を含む文全体の既存の日本語訳（参考。複数行にまたがる文なら全体の訳）: "${lineTranslation}"
 
 ユーザーは洋楽の歌詞を精読しています。答えだけでなく「なぜそう読めるか」を、文の構造と文法の根拠から説明してください。
 扱う文法事項は限定せず、その文の理解に必要なものはすべて解説対象とします。
