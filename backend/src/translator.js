@@ -43,16 +43,23 @@ ${artistName ? `
 - 性別が判断できない、グループ、または曲中で性別が明らかに混在する場合は、中立的な「私」を基本にする
 - 歌詞の内容から性別が明らかなら、それを優先する
 
-【文の区切り】歌詞は1つの文が複数行にまたがることが多いです。改行は文の区切りではありません。
-動詞に必要な要素がそろい、付属する修飾語を含むところまでを1文とし、複数行にまたがる文は1つにまとめて訳してください。
-（例: "I need to wash myself again" / "To hide all the dirt and pain" / "'Cause I'd be scared that there's nothing underneath" の3行は1つの文）
+歌詞を精読するため、次の手順で各行を分析し、JSONの各項目に答えてください。項目は下記の順に、前の項目の結果を踏まえて埋めてください。
 
-各行について：
-1. endsSentence: この行が文の最後の行ならtrue、文が次の行へ続くならfalse。最後の入力行は必ずtrue
-2. translation: endsSentenceがtrueの行には、その文の先頭の行からこの行までをまとめた、自然な日本語訳を入れる。falseの行は空文字
-   - 行ごとに訳して「、」でつなぐのは禁止。英文全体の意味・つながり（理由、目的、条件、対比など）を先に理解し、日本語として最初から書き直す
+1. 文の区切りの判定（sentence）
+   各行について、その行が文法的に完結した文か（主語と述語動詞があるか）を判定し、文がどこで始まりどこで終わるかを示す。
+   「意味のまとまり」と「文法上の文」は区別する。改行は文の区切りではない。
+   行をまたいで1つの文になっている箇所、主語やthatなどの省略、コンマだけで文を繋いでいる箇所にも注意して判定する。
+   値は「完結（この行で1文が完結）」「開始（文が始まり次の行へ続く）」「継続（前の行から続き、次の行へも続く）」「終了（前の行から続き、この行で文が終わる）」のいずれか。
+2. 翻訳（endsUnit, translation）
+   基本は行ごとに訳す。行またぎで1行だけでは訳せない箇所に限り、その範囲をまとめて訳す。
+   - endsUnit: この行で訳の単位が終わるならtrue。次の行と合わせないと訳せないならfalse。最後の入力行は必ずtrue
+   - translation: endsUnitがtrueの行には、その単位の先頭の行からこの行までの自然な日本語訳を入れる（行ごとに訳せる行は、その行だけの訳）。falseの行は空文字
+   - まとめて訳す場合、行ごとに訳して「、」でつなぐのは禁止。英文全体の意味・つながり（理由、目的、条件、対比など）を先に理解し、日本語として最初から書き直す
    - 英語の語順にこだわらず、日本語で自然な順序に並べ替えてよい。日本語では2〜3文に分けてもよい
    - 歌詞らしい口調（話し言葉・感情）は保つ
+
+上記に加えて、各行について次の項目も記載してください。
+
 3. explanation: 解説（※下記の条件に該当する場合のみ）
 
 【重要】explanationは以下の場合のみ記載してください：
@@ -73,10 +80,10 @@ ${artistName ? `
    部分文字列をそのまま配列で返してください（文字位置ではなく、原文からそのまま抜き出した文字列）。
    explanationが空文字の行はhardSpansも空配列にしてください。
 
-以下のJSON形式で出力（必ずこの形式を守ってください）：
+以下のJSON形式で出力（必ずこの形式・この順序を守ってください）：
 {"translations": [
-  {"original": "フレーズ1", "endsSentence": false, "translation": "", "explanation": "", "hardSpans": []},
-  {"original": "フレーズ2", "endsSentence": true, "translation": "フレーズ1〜2をまとめた日本語訳", "explanation": "特殊な表現の解説", "hardSpans": ["該当箇所"]}
+  {"original": "フレーズ1", "sentence": "開始", "endsUnit": false, "translation": "", "explanation": "", "hardSpans": []},
+  {"original": "フレーズ2", "sentence": "終了", "endsUnit": true, "translation": "フレーズ1〜2をまとめた日本語訳", "explanation": "特殊な表現の解説", "hardSpans": ["該当箇所"]}
 ]}
 
 フレーズ一覧：
@@ -163,16 +170,18 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
           translation: String(translation || ""),
           explanation: String(explanation || ""),
           hardSpans,
-          endsSentence: item.endsSentence !== false, // 指定がなければ1行1文として扱う
+          // 訳の単位の終端（sentenceは精読の手順用で保存しない）。
+          // 指定がなければ1行1訳として扱う
+          endsUnit: (item.endsUnit ?? item.endsSentence) !== false,
         };
       });
-      normalized[normalized.length - 1].endsSentence = true;
+      normalized[normalized.length - 1].endsUnit = true;
 
-      // 文の区切りに従って、同じ文の全行に同じ訳と文の先頭行(sentenceStart)を付ける。
-      // 文末でない行に訳が入っていた場合は、文末行の訳が空のときだけ補う。
+      // 訳の単位に従って、同じ単位の全行に同じ訳と単位の先頭行(sentenceStart)を付ける。
+      // 単位の終端でない行に訳が入っていた場合は、終端行の訳が空のときだけ補う。
       let groupStart = 0;
       for (let i = 0; i < normalized.length; i++) {
-        if (!normalized[i].endsSentence) continue;
+        if (!normalized[i].endsUnit) continue;
         const group = normalized.slice(groupStart, i + 1);
         const text =
           normalized[i].translation || group.map((g) => g.translation).filter(Boolean).join(" ");
