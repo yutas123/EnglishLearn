@@ -8,6 +8,7 @@ type Line = {
   lineIndex: number;
   original: string;
   translation: string;
+  sentenceStart: number | null;
   sectionLabel: string | null;
   grammar: Grammar | null;
   chatMessages: ChatMessage[];
@@ -81,15 +82,31 @@ export default function ListeningLines({
         const sectionLabel =
           line.sectionLabel && line.sectionLabel !== prevLabel ? line.sectionLabel : null;
         const isNewSection = Boolean(sectionLabel) && index > 0;
-        const showTranslation = shownTranslations.has(line.lineIndex);
+        // 複数行にまたがる文は、訳を最終行の下に1つだけ出す（sentenceStartがnullの古いデータは1行1文）
+        const sentenceKey = line.sentenceStart ?? line.lineIndex;
+        const prevLine = index > 0 ? lines[index - 1] : null;
+        const nextLine = index < lines.length - 1 ? lines[index + 1] : null;
+        const isSentenceEnd = !nextLine || (nextLine.sentenceStart ?? nextLine.lineIndex) !== sentenceKey;
+        const isMultiLineSentence =
+          (prevLine !== null && (prevLine.sentenceStart ?? prevLine.lineIndex) === sentenceKey) ||
+          !isSentenceEnd;
+        const isSentenceStart =
+          !prevLine || (prevLine.sentenceStart ?? prevLine.lineIndex) !== sentenceKey;
+        // 同じ文の行どうしは行間を詰める
+        const paddingY = isMultiLineSentence
+          ? `${isSentenceStart ? "pt-2.5" : "pt-0.5"} ${isSentenceEnd ? "pb-2.5" : "pb-0.5"}`
+          : "py-2.5";
+        const showTranslation = shownTranslations.has(sentenceKey);
         const showGrammar = openGrammar.has(line.lineIndex);
 
         return (
           <div
             key={line.id}
-            className={`flex flex-col gap-1 py-2.5 ${
+            className={`flex flex-col gap-1 ${paddingY} ${
               isNewSection ? "border-t border-zinc-200 pt-4" : ""
-            }`}
+            } ${isMultiLineSentence ? "border-l-2 border-l-zinc-200 pl-3" : ""} ${
+            isMultiLineSentence && index > 0 && isSentenceStart ? "mt-2" : ""
+          }`}
           >
             {sectionLabel && (
               <div
@@ -106,7 +123,7 @@ export default function ListeningLines({
                 <IconButton
                   active={showTranslation}
                   label={showTranslation ? "対訳を閉じる" : "対訳を表示"}
-                  onClick={() => toggle(setShownTranslations, line.lineIndex)}
+                  onClick={() => toggle(setShownTranslations, sentenceKey)}
                 >
                   <TextIcon />
                 </IconButton>
@@ -120,7 +137,7 @@ export default function ListeningLines({
               </div>
             </div>
 
-            {showTranslation && (
+            {showTranslation && isSentenceEnd && (
               <p className="break-words text-sm text-zinc-500">{line.translation}</p>
             )}
 

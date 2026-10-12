@@ -64,6 +64,7 @@ export async function translateAndSaveTrack({ createdTrack, lyrics, artistName, 
       explanation: t.explanation || null,
       hardSpans: t.hardSpans?.length ? t.hardSpans : null,
       sectionLabel: sectionByLine[i] || null,
+      sentenceStart: t.sentenceStart ?? null,
     })),
   });
 

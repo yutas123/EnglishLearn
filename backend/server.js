@@ -1252,43 +1252,68 @@ app.put("/api/tracks/:id/lines/:lineIndex", async (req, res) => {
     const target = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
     if (!target) return res.status(404).json({ error: "該当する行がありません" });
 
-    // 前後2行を文脈として渡して、その行だけ訳し直す
+    // 前後2行（と、それらが属する文の全行）を渡して、文単位で訳し直す
     let translated = null;
+    let windowRows = [];
+    let windowResults = [];
     if (OPENAI_API_KEY) {
       try {
-        const [neighbors, track] = await Promise.all([
-          prisma.translation.findMany({
-            where: { trackId, lineIndex: { gte: lineIndex - 2, lte: lineIndex + 2, not: lineIndex } },
-            orderBy: { lineIndex: "asc" },
-            select: { lineIndex: true, original: true },
-          }),
-          prisma.track.findUnique({ where: { id: trackId }, include: { album: true } }),
-        ]);
-        const lines = [...neighbors, { lineIndex, original }]
-          .sort((x, y) => x.lineIndex - y.lineIndex);
+        const near = await prisma.translation.findMany({
+          where: { trackId, lineIndex: { gte: lineIndex - 2, lte: lineIndex + 2 } },
+        });
+        const starts = [...new Set(near.map((r) => r.sentenceStart).filter((n) => n != null))];
+        const extra = starts.length
+          ? await prisma.translation.findMany({
+              where: { trackId, sentenceStart: { in: starts }, lineIndex: { notIn: near.map((r) => r.lineIndex) } },
+            })
+          : [];
+        const rows = [...near, ...extra].sort((x, y) => x.lineIndex - y.lineIndex);
+        const track = await prisma.track.findUnique({ where: { id: trackId }, include: { album: true } });
         const { translations } = await translateLyrics(
-          lines.map((l) => l.original),
+          rows.map((r) => (r.lineIndex === lineIndex ? original : r.original)),
           OPENAI_API_KEY,
           { artistName: track?.album.artistName }
         );
-        const t = translations[lines.findIndex((l) => l.lineIndex === lineIndex)];
-        if (t?.translation) translated = t;
+        const t = translations[rows.findIndex((r) => r.lineIndex === lineIndex)];
+        if (t?.translation) {
+          translated = t;
+          windowRows = rows;
+          windowResults = translations;
+        }
       } catch (err) {
         console.log(`    ⚠️ 1行の再翻訳に失敗: ${err.message}`);
       }
     }
 
-    await prisma.translation.update({
-      where: { id: target.id },
-      data: translated
-        ? {
-            original,
-            translation: translated.translation,
-            explanation: translated.explanation || null,
-            hardSpans: translated.hardSpans?.length ? translated.hardSpans : Prisma.DbNull,
-          }
-        : { original, hardSpans: Prisma.DbNull }, // 対訳は残すが、古い原文に基づく難所ハイライトは外す
-    });
+    if (translated) {
+      // 文が変わりうるので、窓内の全行の訳と文の区切りを更新する（解説・難所は修正した行だけ作り直す）
+      await prisma.$transaction(
+        windowRows.map((row, k) => {
+          const r = windowResults[k];
+          const isTarget = row.lineIndex === lineIndex;
+          return prisma.translation.update({
+            where: { id: row.id },
+            data: {
+              translation: r.translation || row.translation,
+              sentenceStart: r.sentenceStart == null ? null : windowRows[r.sentenceStart].lineIndex,
+              ...(isTarget
+                ? {
+                    original,
+                    explanation: r.explanation || null,
+                    hardSpans: r.hardSpans?.length ? r.hardSpans : Prisma.DbNull,
+                  }
+                : {}),
+            },
+          });
+        })
+      );
+    } else {
+      // 対訳は残すが、古い原文に基づく難所ハイライトは外す
+      await prisma.translation.update({
+        where: { id: target.id },
+        data: { original, hardSpans: Prisma.DbNull },
+      });
+    }
     res.json({ ok: true, original, translation: translated?.translation ?? null });
   } catch (error) {
     res.status(500).json({ error: error.message });

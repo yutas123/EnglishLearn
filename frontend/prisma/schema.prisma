@@ -56,6 +56,7 @@ model Translation {
   explanation  String? // LLMによる自動解説（倒置・イディオム等）
   hardSpans    Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
   sectionLabel String? // Geniusのセクション見出し原文（例: "Verse 1: Paul McCartney & John Lennon"、新規処理分のみ）
+  sentenceStart Int? // この行が属する文の先頭行のlineIndex（複数行にまたがる文の対訳用。nullは従来の1行1訳）
 }
 
 model VocabEntry {

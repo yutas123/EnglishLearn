@@ -22,6 +22,7 @@ type Line = {
   lineIndex: number;
   original: string;
   translation: string;
+  sentenceStart: number | null;
   explanation: string | null;
   sectionLabel: string | null;
   knownSpans: KnownSpan[];
@@ -688,6 +689,20 @@ export default function LyricsList({
         const isNewSection = Boolean(sectionLabel) && index > 0;
         const isCurrentSection =
           Boolean(currentSectionLabel) && line.sectionLabel === currentSectionLabel;
+        // 複数行にまたがる文は、訳を最終行の下に1つだけ出す（sentenceStartがnullの古いデータは1行1文）
+        const sentenceKey = line.sentenceStart ?? line.lineIndex;
+        const prevLine = index > 0 ? lines[index - 1] : null;
+        const nextLine = index < lines.length - 1 ? lines[index + 1] : null;
+        const isSentenceEnd = !nextLine || (nextLine.sentenceStart ?? nextLine.lineIndex) !== sentenceKey;
+        const isMultiLineSentence =
+          (prevLine !== null && (prevLine.sentenceStart ?? prevLine.lineIndex) === sentenceKey) ||
+          !isSentenceEnd;
+        const isSentenceStart =
+          !prevLine || (prevLine.sentenceStart ?? prevLine.lineIndex) !== sentenceKey;
+        // 同じ文の行どうしは行間を詰める
+        const paddingY = isMultiLineSentence
+          ? `${isSentenceStart ? "pt-3" : "pt-0.5"} ${isSentenceEnd ? "pb-3" : "pb-0.5"}`
+          : "py-3";
 
         return (
         <div
@@ -695,10 +710,12 @@ export default function LyricsList({
           id={`line-${line.lineIndex}`}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className={`flex scroll-mt-20 flex-col gap-1 py-3 transition-colors duration-700 ${
+          className={`flex scroll-mt-20 flex-col gap-1 ${paddingY} transition-colors duration-700 ${
             flashLineIndex === line.lineIndex ? "bg-amber-100" : ""
           } ${
             isNewSection ? "border-t border-zinc-200 pt-4" : ""
+          } ${isMultiLineSentence ? "border-l-2 border-l-zinc-200 pl-3" : ""} ${
+            isMultiLineSentence && index > 0 && isSentenceStart ? "mt-2" : ""
           }`}
         >
           {sectionLabel && (
@@ -723,7 +740,7 @@ export default function LyricsList({
                 handleCoreClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex, alsoKnown)
             )}
           </p>
-          {line.translation && (
+          {isSentenceEnd && line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
           )}
           {line.explanation && (

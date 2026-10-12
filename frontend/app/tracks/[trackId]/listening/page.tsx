@@ -37,6 +37,7 @@ export default async function ListeningPage({
       lineIndex: line.lineIndex,
       original: line.original,
       translation: line.translation,
+      sentenceStart: line.sentenceStart,
       sectionLabel: line.sectionLabel,
       // 歌詞の原文が後から修正されていたら、古い解説は出さない（開き直すと作り直される）
       grammar:

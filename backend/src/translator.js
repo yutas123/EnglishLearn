@@ -43,9 +43,17 @@ ${artistName ? `
 - 性別が判断できない、グループ、または曲中で性別が明らかに混在する場合は、中立的な「私」を基本にする
 - 歌詞の内容から性別が明らかなら、それを優先する
 
+【文の区切り】歌詞は1つの文が複数行にまたがることが多いです。改行は文の区切りではありません。
+動詞に必要な要素がそろい、付属する修飾語を含むところまでを1文とし、複数行にまたがる文は1つにまとめて訳してください。
+（例: "I need to wash myself again" / "To hide all the dirt and pain" / "'Cause I'd be scared that there's nothing underneath" の3行は1つの文）
+
 各行について：
-1. translation: 自然で分かりやすい日本語訳
-2. explanation: 解説（※下記の条件に該当する場合のみ）
+1. endsSentence: この行が文の最後の行ならtrue、文が次の行へ続くならfalse。最後の入力行は必ずtrue
+2. translation: endsSentenceがtrueの行には、その文の先頭の行からこの行までをまとめた、自然な日本語訳を入れる。falseの行は空文字
+   - 行ごとに訳して「、」でつなぐのは禁止。英文全体の意味・つながり（理由、目的、条件、対比など）を先に理解し、日本語として最初から書き直す
+   - 英語の語順にこだわらず、日本語で自然な順序に並べ替えてよい。日本語では2〜3文に分けてもよい
+   - 歌詞らしい口調（話し言葉・感情）は保つ
+3. explanation: 解説（※下記の条件に該当する場合のみ）
 
 【重要】explanationは以下の場合のみ記載してください：
 - 倒置、省略など特殊な文法構造がある場合
@@ -61,14 +69,14 @@ ${artistName ? `
 普通の文や、基本的な単語・文法で理解できる行には解説は不要です（空文字にしてください）。
 同じ表現・文法パターンが曲中で繰り返し登場する場合、解説は最初の1回のみとし、2回目以降は空文字にしてください。
 
-3. hardSpans: explanationを記載した行についてのみ、その行の原文(original)の中で解説対象となった
+4. hardSpans: explanationを記載した行についてのみ、その行の原文(original)の中で解説対象となった
    部分文字列をそのまま配列で返してください（文字位置ではなく、原文からそのまま抜き出した文字列）。
    explanationが空文字の行はhardSpansも空配列にしてください。
 
 以下のJSON形式で出力（必ずこの形式を守ってください）：
 {"translations": [
-  {"original": "フレーズ1", "translation": "日本語訳1", "explanation": "", "hardSpans": []},
-  {"original": "フレーズ2", "translation": "日本語訳2", "explanation": "特殊な表現の解説", "hardSpans": ["該当箇所"]}
+  {"original": "フレーズ1", "endsSentence": false, "translation": "", "explanation": "", "hardSpans": []},
+  {"original": "フレーズ2", "endsSentence": true, "translation": "フレーズ1〜2をまとめた日本語訳", "explanation": "特殊な表現の解説", "hardSpans": ["該当箇所"]}
 ]}
 
 フレーズ一覧：
@@ -136,8 +144,8 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
         // 行数が一致する場合は入力行をそのまま使う（[歌い手]ラベルがoriginalに混入するのを防ぐ）
         const original =
           items.length === lines.length ? lines[idx] : (item.original ?? values[0] ?? "");
-        const translation = item.translation ?? values[1] ?? "";
-        const explanation = item.explanation ?? values[2] ?? "";
+        const translation = item.translation ?? "";
+        const explanation = item.explanation ?? "";
         const rawHardSpans = Array.isArray(item.hardSpans) ? item.hardSpans : [];
 
         const hardSpans = [];
@@ -155,8 +163,25 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
           translation: String(translation || ""),
           explanation: String(explanation || ""),
           hardSpans,
+          endsSentence: item.endsSentence !== false, // 指定がなければ1行1文として扱う
         };
       });
+      normalized[normalized.length - 1].endsSentence = true;
+
+      // 文の区切りに従って、同じ文の全行に同じ訳と文の先頭行(sentenceStart)を付ける。
+      // 文末でない行に訳が入っていた場合は、文末行の訳が空のときだけ補う。
+      let groupStart = 0;
+      for (let i = 0; i < normalized.length; i++) {
+        if (!normalized[i].endsSentence) continue;
+        const group = normalized.slice(groupStart, i + 1);
+        const text =
+          normalized[i].translation || group.map((g) => g.translation).filter(Boolean).join(" ");
+        for (const g of group) {
+          g.translation = text;
+          g.sentenceStart = groupStart;
+        }
+        groupStart = i + 1;
+      }
 
       // バリデーション: originalが空でない行が十分あるか
       const validCount = normalized.filter((item) => item.original).length;
@@ -181,7 +206,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
       console.log(`    ⚠️ 翻訳エラー (チャンク): ${error.message}`);
       // フォールバック：原文のみ返す
       return {
-        items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [] })),
+        items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [], sentenceStart: null })),
         costUsd: 0,
       };
     }
@@ -189,7 +214,7 @@ ${lines.map((line, i) => `${i + 1}. ${line}`).join("\n")}`;
 
   console.log(`    ⚠️ 翻訳エラー (チャンク): ${lastError?.message}`);
   return {
-    items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [] })),
+    items: lines.map((line) => ({ original: line, translation: "", explanation: "", hardSpans: [], sentenceStart: null })),
     costUsd: 0,
   };
 }
@@ -225,7 +250,13 @@ export async function translateLyrics(lines, apiKey, { artistName, sectionByLine
     chunks.map((chunk) => translateChunk(openai, chunk.lines, { artistName, sections: chunk.sections }))
   );
 
-  const allResults = results.flatMap((r) => r.items);
+  // sentenceStartはチャンク内の位置なので、歌詞全体での位置に直す
+  const allResults = results.flatMap((r, k) =>
+    r.items.map((item) => ({
+      ...item,
+      sentenceStart: item.sentenceStart == null ? null : item.sentenceStart + k * CHUNK_SIZE,
+    }))
+  );
   const totalCostUsd = results.reduce((sum, r) => sum + r.costUsd, 0);
 
   return { translations: allResults, costUsd: totalCostUsd };
