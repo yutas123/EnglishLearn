@@ -76,7 +76,10 @@ export default function ListeningLines({
     () => new Set(lines.filter((l) => l.grammar || l.chatMessages.length > 0).map((l) => l.lineIndex))
   );
   // 文の先頭行（文法解説・チャットのデータはここに載っている）
-  const unitStartLine = new Map(lines.map((l) => [l.sentenceStart ?? l.lineIndex, l]));
+  // 同じ文の行が複数あるので、lineIndex と一致する先頭行だけを採用する（後の行で上書きしない）
+  const unitStartLine = new Map(
+    lines.filter((l) => (l.sentenceStart ?? l.lineIndex) === l.lineIndex).map((l) => [l.lineIndex, l])
+  );
 
   function markGenerated(lineIndex: number, generated: boolean) {
     setGeneratedLines((prev) => {
