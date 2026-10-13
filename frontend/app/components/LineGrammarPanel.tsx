@@ -93,22 +93,22 @@ export default function LineGrammarPanel({
   if (!open) return null;
 
   return (
-    <div className="text-sm text-zinc-500">
+    <div className="text-base text-zinc-500">
       {(
         <div className="mt-1 flex flex-col gap-3 rounded-lg border border-zinc-200 p-3">
                     {error && <p className="text-xs text-red-600">{error}</p>}
 
           {grammar && (
             <div className="flex flex-col gap-2.5 text-zinc-700">
-              <p className="break-words text-sm">{grammar.translation}</p>
+              <p className="break-words text-base">{grammar.translation}</p>
 
-              <p className="break-words rounded bg-zinc-50 p-2 text-xs leading-relaxed">
+              <p className="break-words rounded bg-zinc-50 p-2 text-base leading-relaxed">
                 🦴 {grammar.skeleton}
               </p>
 
               <ul className="flex flex-col gap-1">
                 {grammar.chunks.map((chunk, i) => (
-                  <li key={i} className="break-words text-xs leading-relaxed">
+                  <li key={i} className="break-words text-base leading-relaxed">
                     <span className="font-medium text-zinc-800">{chunk.text}</span>
                     <span className="ml-1.5 rounded bg-sky-50 px-1.5 py-0.5 text-sky-700">
                       {chunk.role}
@@ -119,7 +119,7 @@ export default function LineGrammarPanel({
               </ul>
 
               {grammar.points.length > 0 && (
-                <ul className="flex list-disc flex-col gap-1 pl-4 text-xs leading-relaxed">
+                <ul className="flex list-disc flex-col gap-1 pl-4 text-base leading-relaxed">
                   {grammar.points.map((point, i) => (
                     <li key={i} className="break-words">
                       {point}
@@ -139,12 +139,12 @@ export default function LineGrammarPanel({
           )}
 
           <div className={`flex flex-col gap-2 ${grammar ? "border-t border-zinc-100 pt-3" : ""}`}>
-              <div className="text-xs font-semibold">💬 この文についてAIに質問</div>
+              <div className="text-base font-semibold">💬 この文についてAIに質問</div>
 
               {messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`whitespace-pre-wrap break-words rounded p-2 text-xs leading-relaxed ${
+                  className={`whitespace-pre-wrap break-words rounded p-2 text-base leading-relaxed ${
                     m.role === "user"
                       ? "ml-6 bg-sky-50 text-zinc-800"
                       : "mr-6 bg-zinc-50 text-zinc-700"
@@ -154,7 +154,7 @@ export default function LineGrammarPanel({
                 </div>
               ))}
 
-              {sending && <p className="mr-6 text-xs">考え中...</p>}
+              {sending && <p className="mr-6 text-base">考え中...</p>}
               {chatError && <p className="text-xs text-red-600">{chatError}</p>}
 
               <div className="flex items-end gap-2">
