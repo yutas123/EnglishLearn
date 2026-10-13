@@ -12,14 +12,17 @@ import {
   playTrack,
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
-import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
+import { lemmatizeAndDefine, explainSpan, explainCoreImage } from "./src/vocab.js";
+import { generateIllustration } from "./src/illustration.js";
 import { explainListeningDifficulty } from "./src/listening.js";
+import { explainLineGrammar, chatAboutLine } from "./src/grammar.js";
 import {
   evaluateDictation,
   evaluateDictationGroups,
   explainDictationMistake,
 } from "./src/dictation.js";
 import { searchAlbums, getAlbumDetail, getAlbumTracks, getLyrics } from "./src/genius.js";
+import { searchStudioAlbums } from "./src/musicbrainz.js";
 import { translateAndSaveTrack } from "./src/jobs.js";
 import { translateLyrics } from "./src/translator.js";
 import {
@@ -168,6 +171,168 @@ app.post("/api/jobs/from-genius", async (req, res) => {
     });
 
     res.json({ jobId: job.id, artistName, albumName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---- アーティストの公式スタジオアルバムをまとめて登録 ----
+
+const BULK_MAX_ALBUMS = 10; // 1回の登録上限（OpenAI費用とZenRows無料枠の保護）
+const normalizeName = (s) => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+const stripThe = (s) => normalizeName(s).replace(/^the/, "");
+
+/**
+ * GET /api/bulk/artist-albums?artist=... — MusicBrainzから公式スタジオアルバム一覧を取得し、
+ * 登録済み（またはジョブ進行中）のものに印を付けて返す。DB書き込み・AI呼び出しなし。
+ */
+app.get("/api/bulk/artist-albums", async (req, res) => {
+  try {
+    const artist = typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+    if (artist.length < 1) {
+      return res.status(400).json({ error: "artist は必須です" });
+    }
+
+    const { artistName, albums } = await searchStudioAlbums(artist);
+
+    const [dbAlbums, activeJobs] = await Promise.all([
+      prisma.album.findMany({ select: { artistName: true, albumTitle: true } }),
+      prisma.job.findMany({
+        where: { status: { in: ["pending", "running"] } },
+        select: { artistName: true, albumName: true },
+      }),
+    ]);
+    const known = [
+      ...dbAlbums.map((d) => ({ artist: d.artistName, title: d.albumTitle })),
+      ...activeJobs.map((j) => ({ artist: j.artistName, title: j.albumName })),
+    ];
+
+    res.json({
+      artistName,
+      albums: albums.map((a) => ({
+        ...a,
+        registered: known.some(
+          (k) => stripThe(k.artist) === stripThe(artistName) && normalizeName(k.title) === normalizeName(a.title)
+        ),
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/bulk/resolve?artist=...&title=... — MusicBrainzのアルバム1枚に対応するGeniusアルバムを探し、
+ * 確認画面用にトラックリストを返す。見つからなければ genius: null。DB書き込み・AI呼び出しなし。
+ */
+app.get("/api/bulk/resolve", async (req, res) => {
+  try {
+    if (!GENIUS_ACCESS_TOKEN) {
+      return res.status(500).json({ error: "GENIUS_ACCESS_TOKEN が設定されていません" });
+    }
+    const artist = typeof req.query.artist === "string" ? req.query.artist.trim() : "";
+    const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
+    if (!artist || !title) {
+      return res.status(400).json({ error: "artist / title は必須です" });
+    }
+
+    // 版違い（Deluxe等）を誤って拾わないよう、アーティスト名・アルバム名が正規化後に完全一致する候補だけ採用する
+    // スクレイピング代行経由の検索は時々一時的に失敗するため、数回までリトライする
+    let candidates;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        candidates = await searchAlbums(`${artist} ${title}`);
+        break;
+      } catch (error) {
+        if (attempt >= 2) throw error;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    const match = candidates.find(
+      (c) => stripThe(c.artistName) === stripThe(artist) && normalizeName(c.name) === normalizeName(title)
+    );
+    if (!match) {
+      return res.json({ genius: null });
+    }
+
+    const [detail, tracks] = await Promise.all([
+      getAlbumDetail(match.id, GENIUS_ACCESS_TOKEN),
+      getAlbumTracks(match.id, GENIUS_ACCESS_TOKEN),
+    ]);
+    if (!detail || tracks.length === 0) {
+      return res.json({ genius: null });
+    }
+
+    // Genius側の正式名で既に登録済みかも確認する（MusicBrainzの表記と微妙に違う場合の保険）
+    const registered = !!(await prisma.album.findFirst({
+      where: {
+        artistName: { equals: detail.artistName, mode: "insensitive" },
+        albumTitle: { equals: detail.name, mode: "insensitive" },
+      },
+      select: { id: true },
+    }));
+
+    res.json({ genius: { ...detail, tracks }, registered });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/bulk-from-genius — 確認画面で選んだGeniusアルバムを、まとめてジョブとして登録する
+ * body: { albums: [{ geniusAlbumId, artistName, albumName }] }（最大 BULK_MAX_ALBUMS 件）
+ * 登録済みのアルバムは自動でスキップし、ジョブ進行中のものは既存ジョブを返す。ワーカーは1件ずつ順次処理する。
+ */
+app.post("/api/jobs/bulk-from-genius", async (req, res) => {
+  try {
+    const albums = Array.isArray(req.body?.albums) ? req.body.albums : [];
+    if (albums.length === 0) {
+      return res.status(400).json({ error: "albums は1件以上必要です" });
+    }
+    if (albums.length > BULK_MAX_ALBUMS) {
+      return res.status(400).json({ error: `一度に登録できるのは最大${BULK_MAX_ALBUMS}枚です` });
+    }
+    if (albums.some((a) => !a?.geniusAlbumId || !a?.artistName || !a?.albumName)) {
+      return res.status(400).json({ error: "geniusAlbumId / artistName / albumName は必須です" });
+    }
+
+    const jobs = [];
+    const skipped = [];
+    for (const { geniusAlbumId, artistName, albumName } of albums) {
+      const exists = await prisma.album.findFirst({
+        where: {
+          artistName: { equals: artistName, mode: "insensitive" },
+          albumTitle: { equals: albumName, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (exists) {
+        skipped.push({ albumName, reason: "登録済み" });
+        continue;
+      }
+
+      const existingJob = await prisma.job.findFirst({
+        where: { artistName, albumName, status: { in: ["pending", "running"] } },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existingJob) {
+        jobs.push({ jobId: existingJob.id, albumName });
+        continue;
+      }
+
+      const job = await prisma.job.create({
+        data: {
+          type: "album",
+          artistName,
+          albumName,
+          status: "pending",
+          geniusAlbumId: String(geniusAlbumId),
+        },
+      });
+      jobs.push({ jobId: job.id, albumName });
+    }
+
+    res.json({ jobs, skipped });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -331,6 +496,8 @@ app.post("/api/vocab/preview", async (req, res) => {
       partOfSpeech: result.partOfSpeech,
       cefr: result.cefr,
       ipa: result.ipa,
+      phraseType: result.phraseType,
+      coreWord: result.coreWord,
       isExisting: false,
       costUsd: result.costUsd,
     });
@@ -559,6 +726,210 @@ app.post("/api/vocab/explain", async (req, res) => {
 });
 
 /**
+ * POST /api/vocab/core-image — 選択単語のコアイメージ・この行での働き・訳し方をAIで解説（結果はキャッシュ）
+ * body: { trackId, lineIndex, selectedText }
+ */
+app.post("/api/vocab/core-image", async (req, res) => {
+  try {
+    const { trackId, lineIndex, selectedText } = req.body;
+
+    if (!trackId || typeof lineIndex !== "number" || !selectedText) {
+      return res.status(400).json({ error: "trackId / lineIndex / selectedText は必須です" });
+    }
+
+    const cached = await prisma.coreImageNote.findUnique({
+      where: {
+        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
+      },
+    });
+
+    if (cached) {
+      return res.json({
+        lemma: cached.lemma,
+        coreImage: cached.coreImage,
+        roleInLine: cached.roleInLine,
+        translation: cached.translation,
+        costUsd: 0,
+        cached: true,
+      });
+    }
+
+    const line = await prisma.translation.findFirst({
+      where: { trackId, lineIndex },
+    });
+    if (!line) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { lemma, coreImage, roleInLine, translation, costUsd } = await explainCoreImage(
+      { selectedText, lineOriginal: line.original, lineTranslation: line.translation },
+      OPENAI_API_KEY
+    );
+
+    await prisma.coreImageNote.create({
+      data: { trackId, lineIndex, selectedText, lemma, coreImage, roleInLine, translation },
+    });
+
+    res.json({ lemma, coreImage, roleInLine, translation, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 語のイラストを生成してDBに保存する（既にあれば置き換える）。失敗時は例外を投げる。
+ */
+async function generateAndStoreIllustration(entry) {
+  const { data, mimeType } = await generateIllustration(
+    { term: entry.term, coreImage: entry.coreImage },
+    OPENAI_API_KEY
+  );
+  await prisma.coreImageIllustration.upsert({
+    where: { entryId: entry.id },
+    create: { entryId: entry.id, data, mimeType },
+    update: { data, mimeType, createdAt: new Date() },
+  });
+}
+
+/**
+ * POST /api/core-image/save — 「コアイメージ」の解説（キャッシュ済み）をコアイメージ帳に保存する
+ * 語ごとに1件のEntryを作り、出会った用法（曲・行・選択テキスト）をUsageとして積み重ねる。
+ * 新しい語のときはイラストをバックグラウンドで生成する（待たせない）。
+ * body: { trackId, lineIndex, selectedText }
+ */
+app.post("/api/core-image/save", async (req, res) => {
+  try {
+    const { trackId, lineIndex, selectedText } = req.body;
+
+    if (!trackId || typeof lineIndex !== "number" || !selectedText) {
+      return res.status(400).json({ error: "trackId / lineIndex / selectedText は必須です" });
+    }
+
+    const note = await prisma.coreImageNote.findUnique({
+      where: {
+        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
+      },
+    });
+    if (!note) {
+      return res.status(404).json({ error: "先に「コア」でコアイメージを表示してください" });
+    }
+
+    const term = (note.lemma ?? selectedText).trim().toLowerCase();
+
+    let entry = await prisma.coreImageEntry.findUnique({ where: { term } });
+    const isNewEntry = !entry;
+    if (!entry) {
+      entry = await prisma.coreImageEntry.create({
+        data: { term, coreImage: note.coreImage },
+      });
+    }
+
+    const usage = await prisma.coreImageUsage.upsert({
+      where: {
+        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
+      },
+      create: {
+        entryId: entry.id,
+        trackId,
+        lineIndex,
+        selectedText,
+        roleInLine: note.roleInLine,
+        translation: note.translation,
+      },
+      update: {},
+    });
+
+    if (isNewEntry && OPENAI_API_KEY) {
+      generateAndStoreIllustration(entry).catch((error) => {
+        console.error(`⚠️ イラスト生成に失敗 (${entry.term}): ${error.message}`);
+      });
+    }
+
+    res.json({ entryId: entry.id, usageId: usage.id, term: entry.term });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/core-image/usage/:usageId — 保存した用法を削除（語に用法が残らなければ語とイラストも削除）
+ */
+app.delete("/api/core-image/usage/:usageId", async (req, res) => {
+  try {
+    const usage = await prisma.coreImageUsage.findUnique({
+      where: { id: req.params.usageId },
+    });
+    if (!usage) {
+      return res.status(404).json({ error: "対象の用法が見つかりません" });
+    }
+
+    await prisma.coreImageUsage.delete({ where: { id: usage.id } });
+
+    const remaining = await prisma.coreImageUsage.count({
+      where: { entryId: usage.entryId },
+    });
+    if (remaining === 0) {
+      await prisma.coreImageEntry.delete({ where: { id: usage.entryId } });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/core-image/:entryId/illustration — 保存済みイラストの画像本体
+ * 再生成時はフロント側でクエリ文字列(?v=)を変えてキャッシュを回避する
+ */
+app.get("/api/core-image/:entryId/illustration", async (req, res) => {
+  try {
+    const illustration = await prisma.coreImageIllustration.findUnique({
+      where: { entryId: req.params.entryId },
+    });
+    if (!illustration) {
+      return res.status(404).json({ error: "イラストがありません" });
+    }
+    res.setHeader("Content-Type", illustration.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.send(Buffer.from(illustration.data));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/core-image/:entryId/illustration — イラストを（再）生成する
+ */
+app.post("/api/core-image/:entryId/illustration", async (req, res) => {
+  try {
+    const entry = await prisma.coreImageEntry.findUnique({
+      where: { id: req.params.entryId },
+    });
+    if (!entry) {
+      return res.status(404).json({ error: "対象の語が見つかりません" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    await generateAndStoreIllustration(entry);
+
+    const illustration = await prisma.coreImageIllustration.findUnique({
+      where: { entryId: entry.id },
+      select: { createdAt: true },
+    });
+    res.json({ ok: true, version: illustration.createdAt.getTime() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/spotify/state — 現在の再生状態を返す（フロントのリモコンUIがポーリング）
  */
 app.get("/api/spotify/state", async (_req, res) => {
@@ -720,6 +1091,156 @@ app.post("/api/listening/explain", async (req, res) => {
 });
 
 /**
+ * 解説対象の文（複数行にまたがる文はその全行）と前後の行（文脈）を取得する。
+ * 文法解説・チャットは「文の先頭行のlineIndex」をキーにして1文につき1つ持つ。
+ * 渡されたlineIndexが文の途中の行でも、先頭行に読み替える。
+ * @returns {{ target: object, unitStart: number, unitOriginal: string, contextLines: Array<{original: string, isTarget: boolean}> } | null}
+ */
+async function getLineWithContext(trackId, lineIndex, radius = 3) {
+  const line = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
+  if (!line) return null;
+  const unitStart = line.sentenceStart ?? line.lineIndex;
+
+  // 文の範囲: 先頭行から、同じsentenceStartが続く最後の行まで（sentenceStartがnullの古いデータは1行1文）
+  const unitRows =
+    line.sentenceStart == null
+      ? [line]
+      : await prisma.translation.findMany({
+          where: { trackId, sentenceStart: unitStart },
+          orderBy: { lineIndex: "asc" },
+        });
+  const unitEnd = unitRows[unitRows.length - 1].lineIndex;
+  const rows = await prisma.translation.findMany({
+    where: { trackId, lineIndex: { gte: unitStart - radius, lte: unitEnd + radius } },
+    orderBy: { lineIndex: "asc" },
+  });
+  const target = rows.find((r) => r.lineIndex === unitStart) ?? unitRows[0];
+  return {
+    target,
+    unitStart,
+    unitOriginal: unitRows.map((r) => r.original).join("\n"),
+    contextLines: rows.map((r) => ({
+      original: r.original,
+      isTarget: r.lineIndex >= unitStart && r.lineIndex <= unitEnd,
+    })),
+  };
+}
+
+/**
+ * POST /api/listening/grammar — 行の文法分解をAIで生成（結果はキャッシュ、regenerate:true で作り直し）
+ * body: { trackId, lineIndex, regenerate? }
+ */
+app.post("/api/listening/grammar", async (req, res) => {
+  try {
+    const { trackId, lineIndex, regenerate } = req.body;
+    if (!trackId || typeof lineIndex !== "number") {
+      return res.status(400).json({ error: "trackId / lineIndex は必須です" });
+    }
+
+    const ctx = await getLineWithContext(trackId, lineIndex);
+    if (!ctx) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+
+    // 文の途中の行が指定されても、保存は文の先頭行のlineIndexで行う
+    const key = { trackId, lineIndex: ctx.unitStart };
+    const cached = await prisma.lineGrammar.findUnique({
+      where: { trackId_lineIndex: key },
+    });
+    // 歌詞が修正されて原文が変わっていたら、キャッシュは使わず作り直す
+    if (cached && !regenerate && cached.original === ctx.unitOriginal) {
+      return res.json({ grammar: cached.content, costUsd: 0, cached: true });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const { content, costUsd } = await explainLineGrammar(
+      { contextLines: ctx.contextLines, lineTranslation: ctx.target.translation },
+      OPENAI_API_KEY
+    );
+
+    await prisma.lineGrammar.upsert({
+      where: { trackId_lineIndex: key },
+      create: { ...key, original: ctx.unitOriginal, content },
+      update: { original: ctx.unitOriginal, content },
+    });
+
+    res.json({ grammar: content, costUsd, cached: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/listening/chat — 行の文法解説について追加で質問する（履歴は行ごとにDB保存）
+ * body: { trackId, lineIndex, message }
+ */
+app.post("/api/listening/chat", async (req, res) => {
+  try {
+    const { trackId, lineIndex } = req.body;
+    const message = typeof req.body.message === "string" ? req.body.message.trim() : "";
+    if (!trackId || typeof lineIndex !== "number" || !message) {
+      return res.status(400).json({ error: "trackId / lineIndex / message は必須です" });
+    }
+    if (message.length > 1000) {
+      return res.status(400).json({ error: "メッセージは1000文字以内にしてください" });
+    }
+
+    const ctx = await getLineWithContext(trackId, lineIndex);
+    if (!ctx) {
+      return res.status(404).json({ error: "対象の行が見つかりません" });
+    }
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
+    }
+
+    const unitIndex = ctx.unitStart;
+    const [grammarRow, historyDesc] = await Promise.all([
+      prisma.lineGrammar.findUnique({ where: { trackId_lineIndex: { trackId, lineIndex: unitIndex } } }),
+      prisma.lineChatMessage.findMany({
+        where: { trackId, lineIndex: unitIndex },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+    const history = historyDesc.reverse();
+
+    const { reply, costUsd } = await chatAboutLine(
+      {
+        contextLines: ctx.contextLines,
+        grammar: grammarRow && grammarRow.original === ctx.unitOriginal ? grammarRow.content : null,
+        history,
+        message,
+      },
+      OPENAI_API_KEY
+    );
+
+    // AI呼び出しが成功した時だけ保存する（失敗時に質問だけ残る状態を避ける）
+    const now = Date.now();
+    const [userMsg, assistantMsg] = await prisma.$transaction([
+      prisma.lineChatMessage.create({
+        data: { trackId, lineIndex: unitIndex, role: "user", content: message, createdAt: new Date(now) },
+      }),
+      prisma.lineChatMessage.create({
+        data: { trackId, lineIndex: unitIndex, role: "assistant", content: reply, createdAt: new Date(now + 1) },
+      }),
+    ]);
+
+    res.json({
+      messages: [
+        { id: userMsg.id, role: "user", content: userMsg.content },
+        { id: assistantMsg.id, role: "assistant", content: assistantMsg.content },
+      ],
+      costUsd,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * PUT /api/tracks/:id/youtube — 書き取りモードで再生するYouTube動画IDを保存する（null で解除）
  */
 app.put("/api/tracks/:id/youtube", async (req, res) => {
@@ -754,43 +1275,68 @@ app.put("/api/tracks/:id/lines/:lineIndex", async (req, res) => {
     const target = await prisma.translation.findFirst({ where: { trackId, lineIndex } });
     if (!target) return res.status(404).json({ error: "該当する行がありません" });
 
-    // 前後2行を文脈として渡して、その行だけ訳し直す
+    // 前後2行（と、それらが属する文の全行）を渡して、文単位で訳し直す
     let translated = null;
+    let windowRows = [];
+    let windowResults = [];
     if (OPENAI_API_KEY) {
       try {
-        const [neighbors, track] = await Promise.all([
-          prisma.translation.findMany({
-            where: { trackId, lineIndex: { gte: lineIndex - 2, lte: lineIndex + 2, not: lineIndex } },
-            orderBy: { lineIndex: "asc" },
-            select: { lineIndex: true, original: true },
-          }),
-          prisma.track.findUnique({ where: { id: trackId }, include: { album: true } }),
-        ]);
-        const lines = [...neighbors, { lineIndex, original }]
-          .sort((x, y) => x.lineIndex - y.lineIndex);
+        const near = await prisma.translation.findMany({
+          where: { trackId, lineIndex: { gte: lineIndex - 2, lte: lineIndex + 2 } },
+        });
+        const starts = [...new Set(near.map((r) => r.sentenceStart).filter((n) => n != null))];
+        const extra = starts.length
+          ? await prisma.translation.findMany({
+              where: { trackId, sentenceStart: { in: starts }, lineIndex: { notIn: near.map((r) => r.lineIndex) } },
+            })
+          : [];
+        const rows = [...near, ...extra].sort((x, y) => x.lineIndex - y.lineIndex);
+        const track = await prisma.track.findUnique({ where: { id: trackId }, include: { album: true } });
         const { translations } = await translateLyrics(
-          lines.map((l) => l.original),
+          rows.map((r) => (r.lineIndex === lineIndex ? original : r.original)),
           OPENAI_API_KEY,
           { artistName: track?.album.artistName }
         );
-        const t = translations[lines.findIndex((l) => l.lineIndex === lineIndex)];
-        if (t?.translation) translated = t;
+        const t = translations[rows.findIndex((r) => r.lineIndex === lineIndex)];
+        if (t?.translation) {
+          translated = t;
+          windowRows = rows;
+          windowResults = translations;
+        }
       } catch (err) {
         console.log(`    ⚠️ 1行の再翻訳に失敗: ${err.message}`);
       }
     }
 
-    await prisma.translation.update({
-      where: { id: target.id },
-      data: translated
-        ? {
-            original,
-            translation: translated.translation,
-            explanation: translated.explanation || null,
-            hardSpans: translated.hardSpans?.length ? translated.hardSpans : Prisma.DbNull,
-          }
-        : { original, hardSpans: Prisma.DbNull }, // 対訳は残すが、古い原文に基づく難所ハイライトは外す
-    });
+    if (translated) {
+      // 文が変わりうるので、窓内の全行の訳と文の区切りを更新する（解説・難所は修正した行だけ作り直す）
+      await prisma.$transaction(
+        windowRows.map((row, k) => {
+          const r = windowResults[k];
+          const isTarget = row.lineIndex === lineIndex;
+          return prisma.translation.update({
+            where: { id: row.id },
+            data: {
+              translation: r.translation || row.translation,
+              sentenceStart: r.sentenceStart == null ? null : windowRows[r.sentenceStart].lineIndex,
+              ...(isTarget
+                ? {
+                    original,
+                    explanation: r.explanation || null,
+                    hardSpans: r.hardSpans?.length ? r.hardSpans : Prisma.DbNull,
+                  }
+                : {}),
+            },
+          });
+        })
+      );
+    } else {
+      // 対訳は残すが、古い原文に基づく難所ハイライトは外す
+      await prisma.translation.update({
+        where: { id: target.id },
+        data: { original, hardSpans: Prisma.DbNull },
+      });
+    }
     res.json({ ok: true, original, translation: translated?.translation ?? null });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -6,17 +6,31 @@ import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
+// コアイメージ帳に保存した用法（保存した行の選択箇所にだけ紫マーカーを付ける）
+export type CoreSpan = MatchSpan & {
+  usageId: string;
+  entryId: string;
+  term: string;
+  coreImage: string;
+  roleInLine: string;
+  translation: string;
+  illustrationVersion: number | null;
+};
+
 type Line = {
   id: string;
   lineIndex: number;
   original: string;
   translation: string;
+  sentenceStart: number | null;
   explanation: string | null;
   sectionLabel: string | null;
   knownSpans: KnownSpan[];
   hardSpans: MatchSpan[];
+  coreSpans: CoreSpan[];
 };
 
+// マーカー層（背景色）。コアイメージ（下線層）とは独立して重ねて描画する
 type TaggedSpan =
   | (MatchSpan & { kind: "hard" })
   | (KnownSpan & { kind: "known" });
@@ -29,12 +43,36 @@ type Selection = {
   isPhrase: boolean;
   rect: DOMRect;
   existingVocabEntryId?: string;
+  existingCoreUsageId?: string;
 };
 
 type PopupState =
   | { mode: "menu" }
-  | { mode: "loading"; action: "explain" | "preview" | "register" | "delete" }
+  | {
+      mode: "loading";
+      action: "explain" | "coreImage" | "saveCore" | "deleteCore" | "preview" | "register" | "delete";
+    }
   | { mode: "explanation"; text: string }
+  | {
+      mode: "coreImage";
+      coreImage: string;
+      roleInLine: string;
+      translation: string;
+      saved: boolean;
+    }
+  | {
+      mode: "viewCore";
+      usageId: string;
+      entryId: string;
+      term: string;
+      coreImage: string;
+      roleInLine: string;
+      translation: string;
+      illustrationVersion: number | null;
+      // 同じ箇所に登録/解説のマーカーも重なっているとき、そちらへ切り替えるための情報
+      alsoKnown?: { span: KnownSpan; text: string };
+      coreSpan: CoreSpan;
+    }
   | {
       mode: "confirm";
       term: string;
@@ -44,6 +82,8 @@ type PopupState =
       ipa: string | null;
       explanation: string | null;
       isExisting: boolean;
+      // 複数語選択で「まとまりで覚える価値が低い」と判定されたときの、鍵となる1語
+      coreWord: string | null;
     }
   | {
       mode: "registered";
@@ -62,70 +102,132 @@ type PopupState =
       ipa: string | null;
       explanation: string | null;
       isOriginTrack: boolean;
+      // 同じ箇所にコアイメージの下線も重なっているとき、そちらへ切り替えるための情報
+      alsoCore?: { span: CoreSpan; text: string };
+      knownSpan: KnownSpan;
     }
   | { mode: "error"; message: string };
 
 /**
- * 既知語（known）と難所プリハイライト（hard）をマージし、原文を<mark>で分割表示する
- * （dangerouslySetInnerHTMLは使わない）。重なる場合はknownを優先する。
+ * 2つのレイヤーを重ねて原文を描画する（dangerouslySetInnerHTMLは使わない）。
+ * - マーカー層（背景色）: 既知語（known）と難所（hard）。重なる場合はknownを優先
+ * - 下線層（ピンクの下線）: コアイメージ帳に保存した用法
+ * 両者が同じ箇所に重なっても、マーカーの上に下線が付いて両方見える。
  */
 function renderWithHighlights(
   text: string,
   knownSpans: KnownSpan[],
   hardSpans: MatchSpan[],
-  onKnownClick: (span: KnownSpan, el: HTMLElement, matchedText: string) => void
+  coreSpans: CoreSpan[],
+  onKnownClick: (
+    span: KnownSpan,
+    el: HTMLElement,
+    matchedText: string,
+    alsoCore?: { span: CoreSpan; text: string }
+  ) => void,
+  onCoreClick: (
+    span: CoreSpan,
+    el: HTMLElement,
+    matchedText: string,
+    alsoKnown?: { span: KnownSpan; text: string }
+  ) => void
 ) {
   const tagged: TaggedSpan[] = [
     ...knownSpans.map((s) => ({ ...s, kind: "known" as const })),
     ...hardSpans.map((s) => ({ ...s, kind: "hard" as const })),
   ].sort((a, b) => a.start - b.start);
 
-  const spans: TaggedSpan[] = [];
-  let coveredUntil = 0;
+  const markers: TaggedSpan[] = [];
+  let markerCoveredUntil = 0;
   for (const span of tagged) {
-    if (span.start < coveredUntil) continue; // 既存スパンと重なる場合はスキップ
-    spans.push(span);
-    coveredUntil = span.end;
+    if (span.start < markerCoveredUntil) continue; // 既存スパンと重なる場合はスキップ
+    markers.push(span);
+    markerCoveredUntil = span.end;
   }
 
-  if (spans.length === 0) return text;
+  const cores: CoreSpan[] = [];
+  let coreCoveredUntil = 0;
+  for (const span of [...coreSpans].sort((a, b) => a.start - b.start)) {
+    if (span.start < coreCoveredUntil) continue;
+    cores.push(span);
+    coreCoveredUntil = span.end;
+  }
 
-  const nodes: React.ReactNode[] = [];
-  let cursor = 0;
+  if (markers.length === 0 && cores.length === 0) return text;
 
-  spans.forEach((span, i) => {
-    if (span.start > cursor) nodes.push(text.slice(cursor, span.start));
+  // 境界点で区切り、区間ごとに「どのマーカー・どのコア用法に覆われているか」を求める
+  const points = new Set<number>([0, text.length]);
+  for (const span of [...markers, ...cores]) {
+    points.add(Math.max(0, Math.min(text.length, span.start)));
+    points.add(Math.max(0, Math.min(text.length, span.end)));
+  }
+  const sorted = [...points].sort((a, b) => a - b);
 
-    if (span.kind === "known") {
-      nodes.push(
+  type Segment = { start: number; end: number; marker?: TaggedSpan; core?: CoreSpan };
+  const segments: Segment[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    const marker = markers.find((m) => m.start <= a && b <= m.end);
+    const core = cores.find((c) => c.start <= a && b <= c.end);
+    const last = segments[segments.length - 1];
+    if (last && last.marker === marker && last.core === core) {
+      last.end = b; // 同じ組み合わせが続くなら1つにまとめる
+    } else {
+      segments.push({ start: a, end: b, marker, core });
+    }
+  }
+
+  return segments.map((seg, i) => {
+    const body = text.slice(seg.start, seg.end);
+    const { marker, core } = seg;
+
+    let node: React.ReactNode = body;
+
+    if (marker?.kind === "known") {
+      const alsoCore = core
+        ? { span: core, text: text.slice(core.start, core.end) }
+        : undefined;
+      node = (
         <mark
-          key={i}
           className="cursor-pointer rounded bg-emerald-100 px-0.5 text-inherit hover:bg-emerald-200"
           title="登録済み（タップで詳細）"
-          onClick={(e) =>
-            onKnownClick(span, e.currentTarget, text.slice(span.start, span.end))
-          }
+          onClick={(e) => {
+            e.stopPropagation(); // 下線（コア）側のクリックと二重に発火させない
+            onKnownClick(marker, e.currentTarget, text.slice(marker.start, marker.end), alsoCore);
+          }}
         >
-          {text.slice(span.start, span.end)}
+          {body}
         </mark>
       );
-    } else {
-      nodes.push(
+    } else if (marker?.kind === "hard") {
+      node = (
         <mark
-          key={i}
           className="rounded bg-sky-100 px-0.5 text-inherit underline decoration-dotted decoration-sky-400"
           title="難所（要チェック）"
         >
-          {text.slice(span.start, span.end)}
+          {body}
         </mark>
       );
     }
-    cursor = span.end;
+
+    if (core) {
+      node = (
+        <span
+          data-core-marker
+          className="cursor-pointer underline decoration-pink-500 decoration-2 underline-offset-4"
+          title="コアイメージ保存済み（タップで詳細）"
+          onClick={(e) =>
+            onCoreClick(core, e.currentTarget, text.slice(core.start, core.end))
+          }
+        >
+          {node}
+        </span>
+      );
+    }
+
+    return <span key={i}>{node}</span>;
   });
-
-  if (cursor < text.length) nodes.push(text.slice(cursor));
-
-  return nodes;
 }
 
 function normalize(s: string) {
@@ -154,6 +256,20 @@ export default function LyricsList({
     text: null,
   });
   const [currentSectionLabel, setCurrentSectionLabel] = useState<string | null>(null);
+  const [flashLineIndex, setFlashLineIndex] = useState<number | null>(null);
+
+  // 検索結果から #line-N 付きで遷移してきたとき、その行へスクロールして一瞬ハイライトする
+  useEffect(() => {
+    const match = window.location.hash.match(/^#line-(\d+)$/);
+    if (!match) return;
+    const lineIndex = Number(match[1]);
+    document
+      .getElementById(`line-${lineIndex}`)
+      ?.scrollIntoView({ block: "center" });
+    setFlashLineIndex(lineIndex);
+    const timer = setTimeout(() => setFlashLineIndex(null), 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Spotifyでこのページの曲が再生中なら、再生位置÷曲の長さを行数に按分して
   // 「だいたい今このセクション」を推定する（行/秒単位の正確な同期ではなく、あくまで目安）
@@ -252,7 +368,7 @@ export default function LyricsList({
     // ポインタダウン（マウス/タッチ/ペン共通）で新しい選択操作が始まったらポップアップを一旦閉じる
     function handlePointerDown(e: PointerEvent) {
       if ((e.target as HTMLElement)?.closest("[data-vocab-popup]")) return;
-      if ((e.target as HTMLElement)?.closest("mark")) return;
+      if ((e.target as HTMLElement)?.closest("mark, [data-core-marker]")) return;
       setSelection(null);
       setConfirmingDelete(false);
     }
@@ -270,9 +386,10 @@ export default function LyricsList({
 
   function handleKnownClick(
     span: KnownSpan,
-    el: HTMLElement,
+    rect: DOMRect,
     matchedText: string,
-    lineIndex: number
+    lineIndex: number,
+    alsoCore?: { span: CoreSpan; text: string }
   ) {
     window.getSelection()?.removeAllRanges();
     setConfirmingDelete(false);
@@ -282,7 +399,7 @@ export default function LyricsList({
       original: matchedText,
       text: matchedText,
       isPhrase: matchedText.split(/\s+/).length > 1,
-      rect: el.getBoundingClientRect(),
+      rect,
       existingVocabEntryId: span.vocabEntryId,
     });
     setPopup({
@@ -295,6 +412,8 @@ export default function LyricsList({
       ipa: span.ipa,
       explanation: span.explanation,
       isOriginTrack: span.sourceTrackId === trackId,
+      alsoCore,
+      knownSpan: span,
     });
   }
 
@@ -347,16 +466,128 @@ export default function LyricsList({
     }
   }
 
-  async function handlePreviewRegister() {
+  async function handleCoreImage() {
     if (!selection || !BACKEND_URL) return;
+    setPopup({ mode: "loading", action: "coreImage" });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/vocab/core-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId,
+          lineIndex: selection.lineIndex,
+          selectedText: selection.text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "コアイメージの取得に失敗しました");
+      setPopup({
+        mode: "coreImage",
+        coreImage: data.coreImage,
+        roleInLine: data.roleInLine,
+        translation: data.translation,
+        saved: false,
+      });
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
+  async function handleSaveCore() {
+    if (!selection || !BACKEND_URL || popup.mode !== "coreImage") return;
+    const current = popup;
+    setPopup({ mode: "loading", action: "saveCore" });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/core-image/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId,
+          lineIndex: selection.lineIndex,
+          selectedText: selection.text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "保存に失敗しました");
+      setPopup({ ...current, saved: true });
+      router.refresh();
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
+  function handleCoreClick(
+    span: CoreSpan,
+    rect: DOMRect,
+    matchedText: string,
+    lineIndex: number,
+    alsoKnown?: { span: KnownSpan; text: string }
+  ) {
+    window.getSelection()?.removeAllRanges();
+    setConfirmingDelete(false);
+    setContextNote({ loading: false, text: null });
+    setSelection({
+      lineIndex,
+      original: matchedText,
+      text: matchedText,
+      isPhrase: matchedText.split(/\s+/).length > 1,
+      rect,
+      existingCoreUsageId: span.usageId,
+    });
+    setPopup({
+      mode: "viewCore",
+      usageId: span.usageId,
+      entryId: span.entryId,
+      term: span.term,
+      coreImage: span.coreImage,
+      roleInLine: span.roleInLine,
+      translation: span.translation,
+      illustrationVersion: span.illustrationVersion,
+      alsoKnown,
+      coreSpan: span,
+    });
+  }
+
+  async function handleDeleteCore() {
+    if (!selection?.existingCoreUsageId || !BACKEND_URL) return;
+
+    setPopup({ mode: "loading", action: "deleteCore" });
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/core-image/usage/${selection.existingCoreUsageId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "削除に失敗しました");
+      }
+      closePopup();
+      router.refresh();
+    } catch (err) {
+      setPopup({
+        mode: "error",
+        message: err instanceof Error ? err.message : "エラーが発生しました",
+      });
+    }
+  }
+
+  async function handlePreviewRegister(override?: { text: string; isPhrase: boolean }) {
+    if (!selection || !BACKEND_URL) return;
+    const target = override ?? { text: selection.text, isPhrase: selection.isPhrase };
     setPopup({ mode: "loading", action: "preview" });
     try {
       const res = await fetch(`${BACKEND_URL}/api/vocab/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          term: selection.text,
-          isPhrase: selection.isPhrase,
+          term: target.text,
+          isPhrase: target.isPhrase,
           trackId,
           lineIndex: selection.lineIndex,
         }),
@@ -372,6 +603,7 @@ export default function LyricsList({
         ipa: data.ipa,
         explanation: lastExplanation,
         isExisting: data.isExisting,
+        coreWord: data.coreWord ?? null,
       });
     } catch (err) {
       setPopup({
@@ -379,6 +611,12 @@ export default function LyricsList({
         message: err instanceof Error ? err.message : "エラーが発生しました",
       });
     }
+  }
+
+  // 「まとまりで覚える価値が低い」と判定された複数語選択を、鍵となる1語の登録に切り替える
+  function handleSwitchToCoreWord(coreWord: string) {
+    setSelection((s) => (s ? { ...s, text: coreWord, isPhrase: false } : s));
+    handlePreviewRegister({ text: coreWord, isPhrase: false });
   }
 
   async function handleConfirmRegister() {
@@ -451,14 +689,33 @@ export default function LyricsList({
         const isNewSection = Boolean(sectionLabel) && index > 0;
         const isCurrentSection =
           Boolean(currentSectionLabel) && line.sectionLabel === currentSectionLabel;
+        // 複数行にまたがる文は、訳を最終行の下に1つだけ出す（sentenceStartがnullの古いデータは1行1文）
+        const sentenceKey = line.sentenceStart ?? line.lineIndex;
+        const prevLine = index > 0 ? lines[index - 1] : null;
+        const nextLine = index < lines.length - 1 ? lines[index + 1] : null;
+        const isSentenceEnd = !nextLine || (nextLine.sentenceStart ?? nextLine.lineIndex) !== sentenceKey;
+        const isMultiLineSentence =
+          (prevLine !== null && (prevLine.sentenceStart ?? prevLine.lineIndex) === sentenceKey) ||
+          !isSentenceEnd;
+        const isSentenceStart =
+          !prevLine || (prevLine.sentenceStart ?? prevLine.lineIndex) !== sentenceKey;
+        // 同じ文の行どうしは行間を詰める
+        const paddingY = isMultiLineSentence
+          ? `${isSentenceStart ? "pt-3" : "pt-0.5"} ${isSentenceEnd ? "pb-3" : "pb-0.5"}`
+          : "py-3";
 
         return (
         <div
           key={line.id}
+          id={`line-${line.lineIndex}`}
           data-line-index={line.lineIndex}
           data-original={line.original}
-          className={`flex flex-col gap-1 py-3 ${
+          className={`flex scroll-mt-20 flex-col gap-1 ${paddingY} transition-colors duration-700 ${
+            flashLineIndex === line.lineIndex ? "bg-amber-100" : ""
+          } ${
             isNewSection ? "border-t border-zinc-200 pt-4" : ""
+          } ${isMultiLineSentence ? "border-l-2 border-l-zinc-200 pl-3" : ""} ${
+            isMultiLineSentence && index > 0 && isSentenceStart ? "mt-2" : ""
           }`}
         >
           {sectionLabel && (
@@ -472,11 +729,18 @@ export default function LyricsList({
             </div>
           )}
           <p className="break-words font-medium leading-relaxed">
-            {renderWithHighlights(line.original, line.knownSpans, line.hardSpans, (span, el, matchedText) =>
-              handleKnownClick(span, el, matchedText, line.lineIndex)
+            {renderWithHighlights(
+              line.original,
+              line.knownSpans,
+              line.hardSpans,
+              line.coreSpans,
+              (span, el, matchedText, alsoCore) =>
+                handleKnownClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex, alsoCore),
+              (span, el, matchedText, alsoKnown) =>
+                handleCoreClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex, alsoKnown)
             )}
           </p>
-          {line.translation && (
+          {isSentenceEnd && line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
           )}
           {line.explanation && (
@@ -514,8 +778,16 @@ export default function LyricsList({
               >
                 詳しく!
               </button>
+              {selection.text.trim().split(/\s+/).length <= 2 && (
+                <button
+                  onClick={handleCoreImage}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
+                >
+                  🧠 コア
+                </button>
+              )}
               <button
-                onClick={handlePreviewRegister}
+                onClick={() => handlePreviewRegister()}
                 className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
               >
                 📔 登録
@@ -532,6 +804,9 @@ export default function LyricsList({
           {popup.mode === "loading" && (
             <p className="text-xs text-zinc-500">
               {popup.action === "explain" && "解説を生成中..."}
+              {popup.action === "coreImage" && "コアイメージを生成中..."}
+              {popup.action === "saveCore" && "保存中..."}
+              {popup.action === "deleteCore" && "削除中..."}
               {popup.action === "preview" && "登録内容を確認中..."}
               {popup.action === "register" && "登録中..."}
               {popup.action === "delete" && "削除中..."}
@@ -543,7 +818,7 @@ export default function LyricsList({
               <p className="break-words leading-relaxed text-zinc-700">{popup.text}</p>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handlePreviewRegister}
+                  onClick={() => handlePreviewRegister()}
                   className="w-fit rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-50"
                 >
                   📔 登録
@@ -555,6 +830,121 @@ export default function LyricsList({
                   閉じる
                 </button>
               </div>
+            </>
+          )}
+
+          {popup.mode === "coreImage" && (
+            <>
+              <div className="flex flex-col gap-1.5 leading-relaxed text-zinc-700">
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">🧠 コアイメージ</span>
+                  {popup.coreImage}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この行での働き</span>
+                  {popup.roleInLine}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この文脈での訳し方</span>
+                  {popup.translation}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {popup.saved ? (
+                  <span className="text-xs font-medium text-pink-600">
+                    ✓ コアイメージ帳に保存しました
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleSaveCore}
+                    className="w-fit rounded-full border border-pink-300 px-3 py-1 text-xs font-medium text-pink-600 hover:bg-pink-50"
+                  >
+                    🧠 保存
+                  </button>
+                )}
+                <button
+                  onClick={closePopup}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  閉じる
+                </button>
+              </div>
+            </>
+          )}
+
+          {popup.mode === "viewCore" && (
+            <>
+              <p className="break-words font-semibold text-zinc-800">{popup.term}</p>
+              {popup.illustrationVersion && BACKEND_URL && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`${BACKEND_URL}/api/core-image/${popup.entryId}/illustration?v=${popup.illustrationVersion}`}
+                  alt={`${popup.term} のイメージ`}
+                  className="w-full rounded"
+                />
+              )}
+              <div className="flex flex-col gap-1.5 leading-relaxed text-zinc-700">
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">🧠 コアイメージ</span>
+                  {popup.coreImage}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この行での働き</span>
+                  {popup.roleInLine}
+                </p>
+                <p className="break-words">
+                  <span className="block text-xs font-medium text-zinc-400">この文脈での訳し方</span>
+                  {popup.translation}
+                </p>
+              </div>
+              {popup.alsoKnown && selection && (
+                <button
+                  onClick={() =>
+                    handleKnownClick(
+                      popup.alsoKnown!.span,
+                      selection.rect,
+                      popup.alsoKnown!.text,
+                      selection.lineIndex,
+                      { span: popup.coreSpan, text: selection.text }
+                    )
+                  }
+                  className="w-fit text-xs text-emerald-700 underline decoration-dotted hover:text-emerald-800"
+                >
+                  📔 登録内容も見る
+                </button>
+              )}
+
+              {confirmingDelete ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDeleteCore}
+                    className="rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+                  >
+                    削除する
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    className="text-xs text-zinc-400 hover:text-zinc-600"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setConfirmingDelete(true)}
+                    className="w-fit rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    削除
+                  </button>
+                  <button
+                    onClick={closePopup}
+                    className="text-xs text-zinc-400 hover:text-zinc-600"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              )}
             </>
           )}
 
@@ -581,12 +971,30 @@ export default function LyricsList({
                   {popup.explanation}
                 </p>
               )}
+              {popup.coreWord && (
+                <div className="flex flex-col gap-1.5 rounded bg-amber-50 p-2">
+                  <p className="text-xs text-amber-800">
+                    これは決まった慣用表現ではなく、通常の文法の組み合わせです。つまずきの原因は
+                    「{popup.coreWord}」の意味かもしれません。
+                  </p>
+                  <button
+                    onClick={() => handleSwitchToCoreWord(popup.coreWord!)}
+                    className="w-fit rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                  >
+                    「{popup.coreWord}」を登録する
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleConfirmRegister}
-                  className="w-fit rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+                  className={
+                    popup.coreWord
+                      ? "w-fit rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
+                      : "w-fit rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+                  }
                 >
-                  登録する
+                  {popup.coreWord ? "フレーズのまま登録する" : "登録する"}
                 </button>
                 <button
                   onClick={closePopup}
@@ -657,6 +1065,23 @@ export default function LyricsList({
                   className="w-fit text-xs text-zinc-500 underline decoration-dotted hover:text-zinc-700 disabled:opacity-50"
                 >
                   {contextNote.loading ? "この曲での意味を確認中..." : "🔍 この曲での意味を見る"}
+                </button>
+              )}
+
+              {popup.alsoCore && selection && (
+                <button
+                  onClick={() =>
+                    handleCoreClick(
+                      popup.alsoCore!.span,
+                      selection.rect,
+                      popup.alsoCore!.text,
+                      selection.lineIndex,
+                      { span: popup.knownSpan, text: selection.text }
+                    )
+                  }
+                  className="w-fit text-xs text-pink-600 underline decoration-dotted hover:text-pink-700"
+                >
+                  🧠 コアイメージも見る
                 </button>
               )}
 

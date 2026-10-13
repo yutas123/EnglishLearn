@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import ListeningLines from "../../../components/ListeningLines";
+import type { Grammar } from "../../../components/LineGrammarPanel";
 
 export const revalidate = 0;
 
@@ -12,7 +13,7 @@ export default async function ListeningPage({
 }) {
   const { trackId } = await params;
 
-  const [track, marks] = await Promise.all([
+  const [track, grammars, chatMessages] = await Promise.all([
     prisma.track.findUnique({
       where: { id: trackId },
       include: {
@@ -20,24 +21,42 @@ export default async function ListeningPage({
         translations: { orderBy: { lineIndex: "asc" } },
       },
     }),
-    prisma.listeningMark.findMany({ where: { trackId } }),
+    prisma.lineGrammar.findMany({ where: { trackId } }),
+    prisma.lineChatMessage.findMany({ where: { trackId }, orderBy: { createdAt: "asc" } }),
   ]);
 
   if (!track) {
     notFound();
   }
 
-  const markByLineIndex = new Map(marks.map((m) => [m.lineIndex, m]));
+  const grammarByLineIndex = new Map(grammars.map((g) => [g.lineIndex, g]));
+  // 文法解説・チャットは1文につき1つ（文の先頭行のlineIndexで保存）。文の原文は全行を改行でつないだもの
+  const unitOriginals = new Map<number, string[]>();
+  for (const line of track.translations) {
+    const key = line.sentenceStart ?? line.lineIndex;
+    unitOriginals.set(key, [...(unitOriginals.get(key) ?? []), line.original]);
+  }
   const lines = track.translations.map((line) => {
-    const mark = markByLineIndex.get(line.lineIndex);
+    const unitKey = line.sentenceStart ?? line.lineIndex;
+    const isUnitStart = unitKey === line.lineIndex;
+    const grammar = isUnitStart ? grammarByLineIndex.get(line.lineIndex) : undefined;
     return {
       id: line.id,
       lineIndex: line.lineIndex,
       original: line.original,
       translation: line.translation,
+      sentenceStart: line.sentenceStart,
       sectionLabel: line.sectionLabel,
-      isMarked: Boolean(mark),
-      explanation: mark?.explanation ?? null,
+      // 歌詞の原文が後から修正されていたら、古い解説は出さない（開き直すと作り直される）
+      grammar:
+        grammar && grammar.original === (unitOriginals.get(unitKey) ?? []).join("\n")
+          ? (grammar.content as unknown as Grammar)
+          : null,
+      chatMessages: isUnitStart
+        ? chatMessages
+            .filter((m) => m.lineIndex === line.lineIndex)
+            .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content }))
+        : [],
     };
   });
 
@@ -60,8 +79,8 @@ export default async function ListeningPage({
       </header>
 
       <p className="rounded-lg bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500">
-        対訳は表示されません。Spotifyで聴きながら、聞き取れなかった行をタップしてマークしてください。
-        マークした行は下の「🔎 確認する」から訳と解説を見られます。
+        Spotifyで聴きながら使うページです。各行の右の <span className="font-semibold">≡</span> で対訳を表示、
+        <span className="font-semibold"> パズル</span> で文ごとの文法解説とAIへの質問ができます。
       </p>
 
       {lines.length === 0 ? (

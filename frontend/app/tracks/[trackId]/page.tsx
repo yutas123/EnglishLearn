@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
-import LyricsList from "../../components/LyricsList";
+import LyricsList, { type CoreSpan } from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
 import RetryLyricsButton from "../../components/RetryLyricsButton";
 
@@ -16,7 +16,7 @@ export default async function TrackPage({
   const { trackId } = await params;
 
   // track本体と語彙一覧は互いに依存しないため並列に取得し、DB往復回数を減らす
-  const [track, vocabEntries] = await Promise.all([
+  const [track, vocabEntries, coreUsages] = await Promise.all([
     prisma.track.findUnique({
       where: { id: trackId },
       include: {
@@ -37,17 +37,53 @@ export default async function TrackPage({
         sourceTrackId: true,
       },
     }),
+    prisma.coreImageUsage.findMany({
+      where: { trackId },
+      include: {
+        entry: {
+          select: {
+            id: true,
+            term: true,
+            coreImage: true,
+            illustration: { select: { createdAt: true } },
+          },
+        },
+      },
+    }),
   ]);
 
   if (!track) {
     notFound();
   }
   const matcher = buildMatcher(vocabEntries);
-  const linesWithSpans = track.translations.map((line) => ({
-    ...line,
-    knownSpans: findKnownSpans(line.original, matcher),
-    hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
-  }));
+  const linesWithSpans = track.translations.map((line) => {
+    // コアイメージ帳に保存した用法は、保存した行の選択箇所だけにマーカーを付ける（全出現箇所には付けない）
+    const coreSpans: CoreSpan[] = [];
+    const lowerOriginal = line.original.toLowerCase();
+    for (const usage of coreUsages) {
+      if (usage.lineIndex !== line.lineIndex) continue;
+      const start = lowerOriginal.indexOf(usage.selectedText.toLowerCase());
+      if (start < 0) continue;
+      coreSpans.push({
+        start,
+        end: start + usage.selectedText.length,
+        usageId: usage.id,
+        entryId: usage.entry.id,
+        term: usage.entry.term,
+        coreImage: usage.entry.coreImage,
+        roleInLine: usage.roleInLine,
+        translation: usage.translation,
+        illustrationVersion: usage.entry.illustration?.createdAt.getTime() ?? null,
+      });
+    }
+
+    return {
+      ...line,
+      knownSpans: findKnownSpans(line.original, matcher),
+      hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
+      coreSpans,
+    };
+  });
 
   const otherTracks = await prisma.track.findMany({
     where: { albumId: track.albumId },

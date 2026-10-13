@@ -14,6 +14,9 @@ model Album {
   releaseId   String? // MusicBrainz Release ID
   coverArtUrl String?
   geniusUrl   String?
+  releaseYear Int? // リリース年（表示用。取得できなかった旧データはnull）
+  releaseDate String? // リリース日 YYYY-MM-DD（月日が不明なら YYYY / YYYY-MM。同年内の並び順用）
+  isFavorite  Boolean  @default(false) // お気に入り（一覧上部にピン留め）
   createdAt   DateTime @default(now())
   tracks      Track[]
 
@@ -33,22 +36,27 @@ model Track {
   vocabEntries      VocabEntry[]
   vocabOccurrences  VocabOccurrence[]
   spanExplanations  SpanExplanation[]
+  coreImageNotes    CoreImageNote[]
+  coreImageUsages   CoreImageUsage[]
   listeningMarks    ListeningMark[]
+  lineGrammars      LineGrammar[]
+  lineChatMessages  LineChatMessage[]
   dictationAttempts DictationAttempt[]
   lineNotes         TrackLineNote[]
   createdAt         DateTime           @default(now())
 }
 
 model Translation {
-  id           String  @id @default(cuid())
-  trackId      String
-  track        Track   @relation(fields: [trackId], references: [id])
-  lineIndex    Int // 行番号（表示順）
-  original     String
-  translation  String
-  explanation  String? // LLMによる自動解説（倒置・イディオム等）
-  hardSpans    Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
-  sectionLabel String? // Geniusのセクション見出し原文（例: "Verse 1: Paul McCartney & John Lennon"、新規処理分のみ）
+  id            String  @id @default(cuid())
+  trackId       String
+  track         Track   @relation(fields: [trackId], references: [id])
+  lineIndex     Int // 行番号（表示順）
+  original      String
+  translation   String
+  explanation   String? // LLMによる自動解説（倒置・イディオム等）
+  hardSpans     Json? // [{ "start": Int, "end": Int }] 難所ハイライト（新規処理分のみ）
+  sectionLabel  String? // Geniusのセクション見出し原文（例: "Verse 1: Paul McCartney & John Lennon"、新規処理分のみ）
+  sentenceStart Int? // この行が属する文の先頭行のlineIndex（複数行にまたがる文の対訳用。nullは従来の1行1訳）
 }
 
 model VocabEntry {
@@ -103,6 +111,22 @@ model SpanExplanation {
   @@unique([trackId, lineIndex, selectedText])
 }
 
+// 「コアイメージ」ボタンのAI解説キャッシュ（曲・行・選択テキスト単位）
+model CoreImageNote {
+  id           String   @id @default(cuid())
+  trackId      String
+  track        Track    @relation(fields: [trackId], references: [id])
+  lineIndex    Int
+  selectedText String
+  coreImage    String // その語のコアイメージ
+  roleInLine   String // この行での働き
+  translation  String // この文脈での訳し方
+  lemma        String? // 選択語の原形（コアイメージ帳への保存時の見出し語）
+  createdAt    DateTime @default(now())
+
+  @@unique([trackId, lineIndex, selectedText])
+}
+
 model ListeningMark {
   id          String   @id @default(cuid())
   trackId     String
@@ -112,6 +136,32 @@ model ListeningMark {
   createdAt   DateTime @default(now())
 
   @@unique([trackId, lineIndex])
+}
+
+// 行ごとの文法解体解説のキャッシュ（リスニングモード）
+model LineGrammar {
+  id        String   @id @default(cuid())
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  lineIndex Int
+  original  String // 生成時点の原文（歌詞修正後のずれ検知用）
+  content   Json // { translation, skeleton, chunks: [{text, role, note}], points: string[] }
+  createdAt DateTime @default(now())
+
+  @@unique([trackId, lineIndex])
+}
+
+// 行ごとの文法チャット履歴（永続化）
+model LineChatMessage {
+  id        String   @id @default(cuid())
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id])
+  lineIndex Int
+  role      String // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([trackId, lineIndex, createdAt])
 }
 
 model DictationAttempt {
@@ -165,4 +215,42 @@ model Job {
   costUsd         Float    @default(0) // OpenAI API利用の累計コスト（ドル）
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// コアイメージ帳（語ごとに1件。語を知っているのに訳せない「別の用法」を貯める箱）
+model CoreImageEntry {
+  id        String   @id @default(cuid())
+  term      String   @unique // 原形（小文字）
+  coreImage String // その語のコアイメージ（最初に保存した時点の文面で固定）
+  createdAt DateTime @default(now())
+
+  usages       CoreImageUsage[]
+  illustration CoreImageIllustration?
+}
+
+// 出会った用法（曲・行・選択テキスト単位）
+model CoreImageUsage {
+  id           String         @id @default(cuid())
+  entryId      String
+  entry        CoreImageEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  trackId      String
+  track        Track          @relation(fields: [trackId], references: [id])
+  lineIndex    Int
+  selectedText String
+  roleInLine   String
+  translation  String
+  createdAt    DateTime       @default(now())
+
+  @@unique([trackId, lineIndex, selectedText])
+  @@index([trackId])
+  @@index([entryId])
+}
+
+// イラスト本体は一覧クエリで読み込まないよう別テーブルに分離
+model CoreImageIllustration {
+  entryId   String         @id
+  entry     CoreImageEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  data      Bytes
+  mimeType  String
+  createdAt DateTime       @default(now())
 }
