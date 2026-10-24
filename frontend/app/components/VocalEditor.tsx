@@ -37,6 +37,7 @@ function rebuildParts(prev: VoicePart[], boundaries: number[], length: number): 
 export default function VocalEditor({
   lineText,
   initialParts,
+  orderLocked,
   sectionLabel,
   sectionLineCount,
   saving,
@@ -47,6 +48,8 @@ export default function VocalEditor({
 }: {
   lineText: string;
   initialParts: VoicePart[];
+  // 曲全体の並び順が設定されている間は、行ごとの並べ替えは効かない
+  orderLocked: boolean;
   sectionLabel: string | null;
   sectionLineCount: number;
   saving: boolean;
@@ -183,7 +186,9 @@ export default function VocalEditor({
       )}
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-xs text-zinc-400">上の線ほど音程が高い（▲▼で並べ替え）</p>
+        <p className="text-xs text-zinc-400">
+          {orderLocked ? "線の並びは「この曲の線の並び」の設定に従います" : "上の線から順に表示（▲▼で並べ替え）"}
+        </p>
         {voices.length === 0 && <p className="text-xs text-zinc-500">線なし</p>}
         {voices.map((v, i) => (
           <div key={v.member} className="flex flex-wrap items-center gap-2">
@@ -206,12 +211,16 @@ export default function VocalEditor({
             >
               ダブル
             </button>
-            <button onClick={() => move(i, -1)} className="px-1 text-xs text-zinc-500">
-              ▲
-            </button>
-            <button onClick={() => move(i, 1)} className="px-1 text-xs text-zinc-500">
-              ▼
-            </button>
+            {!orderLocked && (
+              <>
+                <button onClick={() => move(i, -1)} className="px-1 text-xs text-zinc-500">
+                  ▲
+                </button>
+                <button onClick={() => move(i, 1)} className="px-1 text-xs text-zinc-500">
+                  ▼
+                </button>
+              </>
+            )}
             <button
               onClick={() => setVoices((prev) => prev.filter((_, k) => k !== i))}
               className="ml-auto px-1 text-xs text-red-500"

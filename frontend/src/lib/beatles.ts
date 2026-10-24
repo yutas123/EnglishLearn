@@ -65,6 +65,57 @@ export function resolveLineParts(
   sectionLabel: string | null,
   lineLength: number
 ): VoicePart[] {
+  const songOrder = resolveSongOrder(vocalOverrides);
+  const parts = resolveLinePartsRaw(vocalParts, vocalOverrides, lineIndex, sectionLabel, lineLength);
+  // 曲全体の並び順の設定があれば全ての行に適用。なければ、セクション指定由来の初期値だけ既定の並びにする
+  return songOrder
+    ? applySongOrder(parts, songOrder)
+    : isLineOverridden(vocalOverrides, lineIndex)
+      ? parts
+      : applySongOrder(parts, DEFAULT_ORDER);
+}
+
+/** 線の上下の既定の並び（上から）。個別の指定や曲ごとの設定があればそちらを優先する */
+export const DEFAULT_ORDER: MemberKey[] = ["paul", "george", "john", "ringo"];
+
+/** 曲全体の並び順の設定は、vocalOverrides の "_order" キーに保存する（行番号のキーとは別） */
+export const SONG_ORDER_KEY = "_order";
+
+export function resolveSongOrder(vocalOverrides: unknown): MemberKey[] | null {
+  if (!vocalOverrides || typeof vocalOverrides !== "object") return null;
+  const raw = (vocalOverrides as Record<string, unknown>)[SONG_ORDER_KEY];
+  if (!Array.isArray(raw)) return null;
+  const order = raw.filter((m): m is MemberKey => typeof m === "string" && m in MEMBERS);
+  return order.length > 0 ? order : null;
+}
+
+function isLineOverridden(vocalOverrides: unknown, lineIndex: number): boolean {
+  return (
+    !!vocalOverrides &&
+    typeof vocalOverrides === "object" &&
+    (vocalOverrides as Record<string, unknown>)[String(lineIndex)] != null
+  );
+}
+
+export function sortVoices(voices: Voice[], order: MemberKey[]): Voice[] {
+  const rank = (m: MemberKey) => {
+    const i = order.indexOf(m);
+    return i < 0 ? order.length : i;
+  };
+  return [...voices].sort((a, b) => rank(a.member) - rank(b.member));
+}
+
+export function applySongOrder(parts: VoicePart[], order: MemberKey[]): VoicePart[] {
+  return parts.map((p) => ({ ...p, voices: sortVoices(p.voices, order) }));
+}
+
+function resolveLinePartsRaw(
+  vocalParts: unknown,
+  vocalOverrides: unknown,
+  lineIndex: number,
+  sectionLabel: string | null,
+  lineLength: number
+): VoicePart[] {
   if (vocalOverrides && typeof vocalOverrides === "object") {
     const value = (vocalOverrides as Record<string, unknown>)[String(lineIndex)];
     // 旧形式: 行全体の歌い手の配列
@@ -96,8 +147,7 @@ function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
   // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
   const bars: Omit<Bar, "offset">[] = [];
   voices.forEach((v) => {
-    // ハモリはリードより少し薄く
-    const color = v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99";
+    const color = MEMBERS[v.member].color;
     const heights = v.double ? [2, 2] : [3];
     heights.forEach((height) => {
       bars.push({ height, color });

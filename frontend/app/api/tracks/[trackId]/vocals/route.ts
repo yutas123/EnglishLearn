@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
+const MEMBER_KEYS = ["john", "paul", "george", "ringo"];
 const TOKEN_PATTERN = /^(john|paul|george|ringo):[LH](:2)?$/;
 
 type Change = string[] | { parts: { end: number; v: string[] }[] } | null;
@@ -36,10 +37,25 @@ export async function POST(
 ) {
   const { trackId } = await params;
   const body = await req.json().catch(() => null);
-  const changes = body?.changes;
+  const changes = body?.changes ?? {};
+  // 曲全体の並び順（上から）。null で解除。undefined なら変更しない
+  const order: unknown = body?.order;
 
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
     return NextResponse.json({ error: "changes が不正です" }, { status: 400 });
+  }
+  if (
+    order !== undefined &&
+    order !== null &&
+    !(
+      Array.isArray(order) &&
+      order.length >= 1 &&
+      order.length <= 4 &&
+      new Set(order).size === order.length &&
+      order.every((m) => typeof m === "string" && MEMBER_KEYS.includes(m))
+    )
+  ) {
+    return NextResponse.json({ error: "並び順が不正です" }, { status: 400 });
   }
   for (const [key, value] of Object.entries(changes)) {
     if (!/^\d+$/.test(key)) {
@@ -58,9 +74,11 @@ export async function POST(
     return NextResponse.json({ error: "曲が見つかりません" }, { status: 404 });
   }
 
-  const merged: Record<string, Exclude<Change, null>> = {
-    ...((track.vocalOverrides as Record<string, Exclude<Change, null>> | null) ?? {}),
+  const merged: Record<string, unknown> = {
+    ...((track.vocalOverrides as Record<string, unknown> | null) ?? {}),
   };
+  if (order === null) delete merged._order;
+  else if (order !== undefined) merged._order = order;
   for (const [key, value] of Object.entries(changes as Record<string, Change>)) {
     if (value === null) delete merged[key];
     else merged[key] = value;
@@ -69,7 +87,7 @@ export async function POST(
   await prisma.track.update({
     where: { id: trackId },
     data: {
-      vocalOverrides: Object.keys(merged).length > 0 ? merged : Prisma.DbNull,
+      vocalOverrides: Object.keys(merged).length > 0 ? (merged as Prisma.InputJsonObject) : Prisma.DbNull,
     },
   });
 

@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { MEMBERS, resolveLineParts, resolveVoices } from "@/lib/beatles";
+import {
+  MEMBERS,
+  DEFAULT_ORDER,
+  applySongOrder,
+  resolveLineParts,
+  resolveSongOrder,
+  resolveVoices,
+} from "@/lib/beatles";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
@@ -50,6 +57,7 @@ export default async function TrackPage({
   const matcher = buildMatcher(
     vocabEntries.map(({ sourceTrack, ...entry }) => ({ ...entry, sourceTrackTitle: sourceTrack.title }))
   );
+  const songOrder = resolveSongOrder(track.vocalOverrides);
   const linesWithSpans = track.translations.map((line) => {
     return {
       ...line,
@@ -62,9 +70,10 @@ export default async function TrackPage({
         line.sectionLabel,
         line.original.length
       ),
-      defaultParts: [
-        { end: line.original.length, voices: resolveVoices(track.vocalParts, line.sectionLabel) },
-      ],
+      defaultParts: applySongOrder(
+        [{ end: line.original.length, voices: resolveVoices(track.vocalParts, line.sectionLabel) }],
+        songOrder ?? DEFAULT_ORDER
+      ),
     };
   });
 
@@ -149,7 +158,7 @@ export default async function TrackPage({
                   {m.name}
                 </span>
               ))}
-              <span className="text-zinc-400">濃い線=リード / 薄い線=ハモリ / 二重線=ダブルトラック</span>
+              <span className="text-zinc-400">二重線=ダブルトラック</span>
             </p>
           )}
         </section>
@@ -175,6 +184,7 @@ export default async function TrackPage({
           title={track.title}
           artistName={track.album.artistName}
           canEditVocals={track.album.artistName.includes("Beatles")}
+          initialSongOrder={songOrder}
         />
       )}
 

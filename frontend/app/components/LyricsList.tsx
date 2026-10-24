@@ -9,6 +9,9 @@ import {
   voiceToken,
   voiceUnderlineStyle,
   underlineTotal,
+  applySongOrder,
+  DEFAULT_ORDER,
+  type MemberKey,
   type VoicePart,
 } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
@@ -163,12 +166,15 @@ export default function LyricsList({
   title,
   artistName,
   canEditVocals = false,
+  initialSongOrder = null,
 }: {
   trackId: string;
   lines: Line[];
   title: string;
   artistName: string;
   canEditVocals?: boolean;
+  // 曲全体の線の並び順（上から）。設定されていれば、全ての行でこの順に線を並べる
+  initialSongOrder?: MemberKey[] | null;
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -202,10 +208,47 @@ export default function LyricsList({
     return () => window.removeEventListener(VOCAL_EDIT_EVENT, onToggle);
   }, [canEditVocals]);
 
-  const partsFor = (line: Line): VoicePart[] =>
-    (line.lineIndex in localVoices
+  const [songOrder, setSongOrder] = useState<MemberKey[] | null>(initialSongOrder);
+  const [orderDraft, setOrderDraft] = useState<MemberKey[]>(initialSongOrder ?? DEFAULT_ORDER);
+  const [orderSaving, setOrderSaving] = useState(false);
+
+  const partsFor = (line: Line): VoicePart[] => {
+    const parts = (line.lineIndex in localVoices
       ? (localVoices[line.lineIndex] ?? line.defaultParts)
       : line.parts) ?? [{ end: line.original.length, voices: [] }];
+    return songOrder ? applySongOrder(parts, songOrder) : parts;
+  };
+
+  // 曲全体の線の並び順を保存する（null で解除して行ごとの指定に戻す）
+  async function saveSongOrder(order: MemberKey[] | null) {
+    setOrderSaving(true);
+    setVocalError(null);
+    try {
+      const res = await fetch(`/api/tracks/${trackId}/vocals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => null))?.error ?? "保存に失敗しました");
+      }
+      setSongOrder(order);
+      // 解除すると、サーバー側で並べ直した初期値を取り直す必要がある
+      if (!order) window.location.reload();
+    } catch (err) {
+      setVocalError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setOrderSaving(false);
+    }
+  }
+  const moveOrder = (i: number, d: number) =>
+    setOrderDraft((prev) => {
+      const next = [...prev];
+      const t = i + d;
+      if (t < 0 || t >= next.length) return prev;
+      [next[i], next[t]] = [next[t], next[i]];
+      return next;
+    });
 
   // 編集対象の行と同じ見出しで連続している行（「セクション全体」の範囲）
   function sectionRange(index: number): Line[] {
@@ -591,6 +634,56 @@ export default function LyricsList({
 
   return (
     <div ref={containerRef} className="relative flex flex-col">
+      {vocalEditMode && (
+        <div
+          data-vocal-editor
+          className="mb-3 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs"
+        >
+          <p className="font-medium">
+            この曲の線の並び（上→下）{songOrder ? "：設定中（全ての行に適用）" : "：行ごとの指定に従う"}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {orderDraft.map((m, i) => (
+              <span
+                key={m}
+                className="flex items-center gap-1 rounded-full border bg-white px-2 py-1"
+                style={{ borderColor: MEMBERS[m].color }}
+              >
+                <button onClick={() => moveOrder(i, -1)} className="px-0.5 text-zinc-500">
+                  ◀
+                </button>
+                <span
+                  className="inline-block h-[3px] w-4 rounded-full"
+                  style={{ backgroundColor: MEMBERS[m].color }}
+                />
+                <span className="font-medium">{MEMBERS[m].name}</span>
+                <button onClick={() => moveOrder(i, 1)} className="px-0.5 text-zinc-500">
+                  ▶
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => saveSongOrder(orderDraft)}
+              disabled={orderSaving}
+              className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {orderSaving ? "保存中..." : "この並びを全体に適用"}
+            </button>
+            {songOrder && (
+              <button
+                onClick={() => saveSongOrder(null)}
+                disabled={orderSaving}
+                className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white disabled:opacity-50"
+              >
+                設定を解除
+              </button>
+            )}
+          </div>
+          {vocalError && editingVocalIndex === null && <p className="text-red-500">{vocalError}</p>}
+        </div>
+      )}
       {lines.map((line, index) => {
         const prevLabel = index > 0 ? lines[index - 1].sectionLabel : null;
         const sectionLabel =
@@ -728,6 +821,7 @@ export default function LyricsList({
           key={editingVocalIndex}
           lineText={lines[editingVocalIndex].original}
           initialParts={partsFor(lines[editingVocalIndex])}
+          orderLocked={songOrder !== null}
           sectionLabel={lines[editingVocalIndex].sectionLabel}
           sectionLineCount={sectionRange(editingVocalIndex).length}
           saving={vocalSaving}
