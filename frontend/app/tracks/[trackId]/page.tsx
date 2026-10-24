@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { MEMBERS, resolveLineVoices, resolveVoices } from "@/lib/beatles";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
-import LyricsList, { type CoreSpan } from "../../components/LyricsList";
+import LyricsList from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
 import RetryLyricsButton from "../../components/RetryLyricsButton";
 import VocalEditToggle from "../../components/VocalEditToggle";
+import TrackTitle from "../../components/TrackTitle";
 
 export const revalidate = 3600;
 
@@ -18,7 +19,7 @@ export default async function TrackPage({
   const { trackId } = await params;
 
   // track本体と語彙一覧は互いに依存しないため並列に取得し、DB往復回数を減らす
-  const [track, vocabEntries, coreUsages] = await Promise.all([
+  const [track, vocabEntries] = await Promise.all([
     prisma.track.findUnique({
       where: { id: trackId },
       include: {
@@ -37,19 +38,8 @@ export default async function TrackPage({
         ipa: true,
         explanation: true,
         sourceTrackId: true,
-      },
-    }),
-    prisma.coreImageUsage.findMany({
-      where: { trackId },
-      include: {
-        entry: {
-          select: {
-            id: true,
-            term: true,
-            coreImage: true,
-            illustration: { select: { createdAt: true } },
-          },
-        },
+        sourceLineIndex: true,
+        sourceTrack: { select: { title: true } },
       },
     }),
   ]);
@@ -57,33 +47,14 @@ export default async function TrackPage({
   if (!track) {
     notFound();
   }
-  const matcher = buildMatcher(vocabEntries);
+  const matcher = buildMatcher(
+    vocabEntries.map(({ sourceTrack, ...entry }) => ({ ...entry, sourceTrackTitle: sourceTrack.title }))
+  );
   const linesWithSpans = track.translations.map((line) => {
-    // コアイメージ帳に保存した用法は、保存した行の選択箇所だけにマーカーを付ける（全出現箇所には付けない）
-    const coreSpans: CoreSpan[] = [];
-    const lowerOriginal = line.original.toLowerCase();
-    for (const usage of coreUsages) {
-      if (usage.lineIndex !== line.lineIndex) continue;
-      const start = lowerOriginal.indexOf(usage.selectedText.toLowerCase());
-      if (start < 0) continue;
-      coreSpans.push({
-        start,
-        end: start + usage.selectedText.length,
-        usageId: usage.id,
-        entryId: usage.entry.id,
-        term: usage.entry.term,
-        coreImage: usage.entry.coreImage,
-        roleInLine: usage.roleInLine,
-        translation: usage.translation,
-        illustrationVersion: usage.entry.illustration?.createdAt.getTime() ?? null,
-      });
-    }
-
     return {
       ...line,
       knownSpans: findKnownSpans(line.original, matcher),
       hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
-      coreSpans,
       voices: resolveLineVoices(track.vocalParts, track.vocalOverrides, line.lineIndex, line.sectionLabel),
       defaultVoices: resolveVoices(track.vocalParts, line.sectionLabel),
     };
@@ -113,7 +84,7 @@ export default async function TrackPage({
 
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="break-words text-xl font-bold">{track.title}</h1>
+          <TrackTitle title={track.title} spans={findKnownSpans(track.title, matcher)} />
           <p className="break-words text-sm text-zinc-500">
             {track.album.artistName}
           </p>

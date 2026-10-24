@@ -10,6 +10,9 @@ export type VocabTermInput = {
   ipa: string | null;
   explanation: string | null;
   sourceTrackId: string;
+  // 最初に登録した曲のタイトルと行（行は-1ならタイトル）。ポップアップで「どの曲で覚えたか」を出す
+  sourceTrackTitle: string;
+  sourceLineIndex: number;
 };
 
 export type KnownSpan = MatchSpan & {
@@ -21,6 +24,9 @@ export type KnownSpan = MatchSpan & {
   ipa: string | null;
   explanation: string | null;
   sourceTrackId: string;
+  // 最初に登録した曲のタイトルと行（行は-1ならタイトル）。ポップアップで「どの曲で覚えたか」を出す
+  sourceTrackTitle: string;
+  sourceLineIndex: number;
 };
 
 export type VocabMatcher = {
@@ -98,6 +104,8 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           ipa: entry.ipa,
           explanation: entry.explanation,
           sourceTrackId: entry.sourceTrackId,
+          sourceTrackTitle: entry.sourceTrackTitle,
+          sourceLineIndex: entry.sourceLineIndex,
         });
       }
       if (match[0].length === 0) matcher.phraseRegex.lastIndex++;
@@ -125,6 +133,8 @@ export function findKnownSpans(text: string, matcher: VocabMatcher): KnownSpan[]
           ipa: entry.ipa,
           explanation: entry.explanation,
           sourceTrackId: entry.sourceTrackId,
+          sourceTrackTitle: entry.sourceTrackTitle,
+          sourceLineIndex: entry.sourceLineIndex,
         });
       }
     }

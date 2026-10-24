@@ -12,8 +12,7 @@ import {
   playTrack,
 } from "./src/spotify.js";
 import { startWorker } from "./src/worker.js";
-import { lemmatizeAndDefine, explainSpan, explainCoreImage } from "./src/vocab.js";
-import { generateIllustration } from "./src/illustration.js";
+import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
 import { explainLineGrammar, chatAboutLine } from "./src/grammar.js";
 import {
@@ -419,6 +418,20 @@ app.get("/api/jobs/:id", async (req, res) => {
   });
 });
 
+// 曲タイトルを語彙登録・解説の対象にするための疑似的な行番号（歌詞行は0以上）
+const TITLE_LINE_INDEX = -1;
+
+/**
+ * 語彙登録・解説の対象行を取得する。lineIndexが-1のときは曲タイトルを1行の原文として扱う。
+ */
+async function findLineOrTitle(trackId, lineIndex) {
+  if (lineIndex === TITLE_LINE_INDEX) {
+    const track = await prisma.track.findUnique({ where: { id: trackId }, select: { title: true } });
+    return track ? { original: track.title, translation: "" } : null;
+  }
+  return prisma.translation.findFirst({ where: { trackId, lineIndex } });
+}
+
 /**
  * POST /api/vocab/preview — 登録前に内容（意味・品詞・CEFR）をプレビュー取得する。
  * DBへの書き込みは行わない（既存語彙があればそれを返し、新規語彙はAIで下調べのみ行う）。
@@ -432,9 +445,7 @@ app.post("/api/vocab/preview", async (req, res) => {
       return res.status(400).json({ error: "term / trackId / lineIndex は必須です" });
     }
 
-    const line = await prisma.translation.findFirst({
-      where: { trackId, lineIndex },
-    });
+    const line = await findLineOrTitle(trackId, lineIndex);
     if (!line) {
       return res.status(404).json({ error: "対象の行が見つかりません" });
     }
@@ -529,9 +540,7 @@ app.post("/api/vocab/register", async (req, res) => {
       return res.status(400).json({ error: "term / trackId / lineIndex は必須です" });
     }
 
-    const line = await prisma.translation.findFirst({
-      where: { trackId, lineIndex },
-    });
+    const line = await findLineOrTitle(trackId, lineIndex);
     if (!line) {
       return res.status(404).json({ error: "対象の行が見つかりません" });
     }
@@ -699,9 +708,7 @@ app.post("/api/vocab/explain", async (req, res) => {
       return res.json({ explanation: cached.explanation, costUsd: 0, cached: true });
     }
 
-    const line = await prisma.translation.findFirst({
-      where: { trackId, lineIndex },
-    });
+    const line = await findLineOrTitle(trackId, lineIndex);
     if (!line) {
       return res.status(404).json({ error: "対象の行が見つかりません" });
     }
@@ -720,210 +727,6 @@ app.post("/api/vocab/explain", async (req, res) => {
     });
 
     res.json({ explanation, costUsd, cached: false });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/vocab/core-image — 選択単語のコアイメージ・この行での働き・訳し方をAIで解説（結果はキャッシュ）
- * body: { trackId, lineIndex, selectedText }
- */
-app.post("/api/vocab/core-image", async (req, res) => {
-  try {
-    const { trackId, lineIndex, selectedText } = req.body;
-
-    if (!trackId || typeof lineIndex !== "number" || !selectedText) {
-      return res.status(400).json({ error: "trackId / lineIndex / selectedText は必須です" });
-    }
-
-    const cached = await prisma.coreImageNote.findUnique({
-      where: {
-        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
-      },
-    });
-
-    if (cached) {
-      return res.json({
-        lemma: cached.lemma,
-        coreImage: cached.coreImage,
-        roleInLine: cached.roleInLine,
-        translation: cached.translation,
-        costUsd: 0,
-        cached: true,
-      });
-    }
-
-    const line = await prisma.translation.findFirst({
-      where: { trackId, lineIndex },
-    });
-    if (!line) {
-      return res.status(404).json({ error: "対象の行が見つかりません" });
-    }
-
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
-    }
-
-    const { lemma, coreImage, roleInLine, translation, costUsd } = await explainCoreImage(
-      { selectedText, lineOriginal: line.original, lineTranslation: line.translation },
-      OPENAI_API_KEY
-    );
-
-    await prisma.coreImageNote.create({
-      data: { trackId, lineIndex, selectedText, lemma, coreImage, roleInLine, translation },
-    });
-
-    res.json({ lemma, coreImage, roleInLine, translation, costUsd, cached: false });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * 語のイラストを生成してDBに保存する（既にあれば置き換える）。失敗時は例外を投げる。
- */
-async function generateAndStoreIllustration(entry) {
-  const { data, mimeType } = await generateIllustration(
-    { term: entry.term, coreImage: entry.coreImage },
-    OPENAI_API_KEY
-  );
-  await prisma.coreImageIllustration.upsert({
-    where: { entryId: entry.id },
-    create: { entryId: entry.id, data, mimeType },
-    update: { data, mimeType, createdAt: new Date() },
-  });
-}
-
-/**
- * POST /api/core-image/save — 「コアイメージ」の解説（キャッシュ済み）をコアイメージ帳に保存する
- * 語ごとに1件のEntryを作り、出会った用法（曲・行・選択テキスト）をUsageとして積み重ねる。
- * 新しい語のときはイラストをバックグラウンドで生成する（待たせない）。
- * body: { trackId, lineIndex, selectedText }
- */
-app.post("/api/core-image/save", async (req, res) => {
-  try {
-    const { trackId, lineIndex, selectedText } = req.body;
-
-    if (!trackId || typeof lineIndex !== "number" || !selectedText) {
-      return res.status(400).json({ error: "trackId / lineIndex / selectedText は必須です" });
-    }
-
-    const note = await prisma.coreImageNote.findUnique({
-      where: {
-        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
-      },
-    });
-    if (!note) {
-      return res.status(404).json({ error: "先に「コア」でコアイメージを表示してください" });
-    }
-
-    const term = (note.lemma ?? selectedText).trim().toLowerCase();
-
-    let entry = await prisma.coreImageEntry.findUnique({ where: { term } });
-    const isNewEntry = !entry;
-    if (!entry) {
-      entry = await prisma.coreImageEntry.create({
-        data: { term, coreImage: note.coreImage },
-      });
-    }
-
-    const usage = await prisma.coreImageUsage.upsert({
-      where: {
-        trackId_lineIndex_selectedText: { trackId, lineIndex, selectedText },
-      },
-      create: {
-        entryId: entry.id,
-        trackId,
-        lineIndex,
-        selectedText,
-        roleInLine: note.roleInLine,
-        translation: note.translation,
-      },
-      update: {},
-    });
-
-    if (isNewEntry && OPENAI_API_KEY) {
-      generateAndStoreIllustration(entry).catch((error) => {
-        console.error(`⚠️ イラスト生成に失敗 (${entry.term}): ${error.message}`);
-      });
-    }
-
-    res.json({ entryId: entry.id, usageId: usage.id, term: entry.term });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * DELETE /api/core-image/usage/:usageId — 保存した用法を削除（語に用法が残らなければ語とイラストも削除）
- */
-app.delete("/api/core-image/usage/:usageId", async (req, res) => {
-  try {
-    const usage = await prisma.coreImageUsage.findUnique({
-      where: { id: req.params.usageId },
-    });
-    if (!usage) {
-      return res.status(404).json({ error: "対象の用法が見つかりません" });
-    }
-
-    await prisma.coreImageUsage.delete({ where: { id: usage.id } });
-
-    const remaining = await prisma.coreImageUsage.count({
-      where: { entryId: usage.entryId },
-    });
-    if (remaining === 0) {
-      await prisma.coreImageEntry.delete({ where: { id: usage.entryId } });
-    }
-
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/core-image/:entryId/illustration — 保存済みイラストの画像本体
- * 再生成時はフロント側でクエリ文字列(?v=)を変えてキャッシュを回避する
- */
-app.get("/api/core-image/:entryId/illustration", async (req, res) => {
-  try {
-    const illustration = await prisma.coreImageIllustration.findUnique({
-      where: { entryId: req.params.entryId },
-    });
-    if (!illustration) {
-      return res.status(404).json({ error: "イラストがありません" });
-    }
-    res.setHeader("Content-Type", illustration.mimeType);
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.send(Buffer.from(illustration.data));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/core-image/:entryId/illustration — イラストを（再）生成する
- */
-app.post("/api/core-image/:entryId/illustration", async (req, res) => {
-  try {
-    const entry = await prisma.coreImageEntry.findUnique({
-      where: { id: req.params.entryId },
-    });
-    if (!entry) {
-      return res.status(404).json({ error: "対象の語が見つかりません" });
-    }
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY が設定されていません" });
-    }
-
-    await generateAndStoreIllustration(entry);
-
-    const illustration = await prisma.coreImageIllustration.findUnique({
-      where: { entryId: entry.id },
-      select: { createdAt: true },
-    });
-    res.json({ ok: true, version: illustration.createdAt.getTime() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
