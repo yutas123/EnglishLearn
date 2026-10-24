@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
+import { sameTrackTitle } from "@/lib/trackTitle";
 import { MEMBERS, voiceToken, voiceUnderlineStyle, type Voice } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
 import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
@@ -259,11 +260,12 @@ export default function LyricsList({
     async function pollSection() {
       try {
         const res = await fetch(`${BACKEND_URL}/api/spotify/state`);
+        if (!res.ok) return; // 一時的なエラーでは直前の表示を保つ
         const data = await res.json();
 
         const isThisTrack =
           data.isPlaying &&
-          normalize(data.trackName ?? "") === normalize(title) &&
+          sameTrackTitle(data.trackName ?? "", title) &&
           normalize(data.artistName ?? "") === normalize(artistName) &&
           typeof data.progressMs === "number" &&
           typeof data.durationMs === "number" &&
@@ -286,8 +288,18 @@ export default function LyricsList({
     }
 
     pollSection();
-    const interval = setInterval(pollSection, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(pollSection, 3000);
+    // スマホはバックグラウンドでタイマーが止まるため、画面に戻った時点ですぐ取り直す
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pollSection();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackId]);
 

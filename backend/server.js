@@ -11,6 +11,7 @@ import {
   skipToPrevious,
   playTrack,
 } from "./src/spotify.js";
+import { normalizeTrackTitle, sameTrackTitle } from "./src/trackTitle.js";
 import { startWorker } from "./src/worker.js";
 import { lemmatizeAndDefine, explainSpan } from "./src/vocab.js";
 import { explainListeningDifficulty } from "./src/listening.js";
@@ -743,6 +744,7 @@ app.get("/api/spotify/state", async (_req, res) => {
         isPlaying: false,
         trackName: null,
         artistName: null,
+        albumName: null,
         albumArtUrl: null,
         progressMs: null,
         durationMs: null,
@@ -1356,21 +1358,25 @@ app.get("/api/spotify/now-playing-match", async (_req, res) => {
       return res.json({ trackId: null });
     }
 
-    const normalize = (s) => s.toLowerCase().trim();
-    const targetTitle = normalize(state.trackName);
-
     const candidates = await prisma.track.findMany({
       where: { album: { artistName: { equals: state.artistName, mode: "insensitive" } } },
       include: { album: true },
     });
 
+    // 版情報（Remastered 等）を除いた曲名の完全一致のみ。部分一致にすると
+    // "Another Girl" の再生中に "Girl" が当たってしまう。
+    // 同名曲が複数アルバムにある場合は、再生中のアルバム名に近いものを優先する。
+    const sameTitle = candidates.filter((t) => sameTrackTitle(t.title, state.trackName));
+    const albumKey = normalizeTrackTitle(state.albumName ?? "");
     const match =
-      candidates.find((t) => normalize(t.title) === targetTitle) ??
-      candidates.find(
+      sameTitle.find((t) => albumKey && normalizeTrackTitle(t.album.albumTitle) === albumKey) ??
+      sameTitle.find(
         (t) =>
-          normalize(t.title).includes(targetTitle) ||
-          targetTitle.includes(normalize(t.title))
-      );
+          albumKey &&
+          (albumKey.includes(normalizeTrackTitle(t.album.albumTitle)) ||
+            normalizeTrackTitle(t.album.albumTitle).includes(albumKey))
+      ) ??
+      sameTitle[0];
 
     if (!match) {
       return res.json({ trackId: null });

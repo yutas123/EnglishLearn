@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { sameTrackTitle } from "@/lib/trackTitle";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -30,6 +31,7 @@ export default function SpotifyRemote({ trackId, title, artistName }: Props) {
     if (!BACKEND_URL) return;
     try {
       const res = await fetch(`${BACKEND_URL}/api/spotify/state`);
+      if (!res.ok) return; // 一時的なエラーでは直前の状態を保つ
       const data: PlaybackState = await res.json();
       setState(data);
     } catch {
@@ -39,16 +41,24 @@ export default function SpotifyRemote({ trackId, title, artistName }: Props) {
 
   useEffect(() => {
     fetchState();
-    pollRef.current = setInterval(fetchState, 5000);
+    pollRef.current = setInterval(fetchState, 3000);
+    // スマホはバックグラウンドでタイマーが止まるため、画面に戻った時点ですぐ取り直す
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchState();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackId]);
 
   const isThisTrackActive =
     !!state &&
-    normalize(state.trackName ?? "") === normalize(title) &&
+    sameTrackTitle(state.trackName ?? "", title) &&
     normalize(state.artistName ?? "") === normalize(artistName);
   const isThisTrackPlaying = isThisTrackActive && state!.isPlaying;
 

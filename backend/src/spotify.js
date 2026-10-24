@@ -196,6 +196,7 @@ export async function getPlaybackState() {
     isPlaying: Boolean(data.is_playing),
     trackName: item.name,
     artistName: item.artists?.[0]?.name ?? null,
+    albumName: item.album?.name ?? null,
     albumArtUrl: item.album?.images?.[0]?.url ?? null,
     progressMs: typeof data.progress_ms === "number" ? data.progress_ms : null,
     durationMs: typeof item.duration_ms === "number" ? item.duration_ms : null,

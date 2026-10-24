@@ -23,6 +23,8 @@ export default function NowPlayingButton() {
       if (!BACKEND_URL) return;
       try {
         const res = await fetch(`${BACKEND_URL}/api/spotify/now-playing-match`);
+        // 一時的なエラー（Spotify API の失敗など）では、表示を消さず直前の状態を保つ
+        if (!res.ok) return;
         const data = await res.json();
         setMatch(data.trackId ? data : null);
       } catch {
@@ -31,9 +33,17 @@ export default function NowPlayingButton() {
     }
 
     fetchMatch();
-    pollRef.current = setInterval(fetchMatch, 5000);
+    pollRef.current = setInterval(fetchMatch, 3000);
+    // スマホはバックグラウンドでタイマーが止まるため、画面に戻った時点ですぐ取り直す
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchMatch();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, []);
 
