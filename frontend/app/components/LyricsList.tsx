@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
-import { MEMBERS, voiceToken, type Voice } from "@/lib/beatles";
+import { MEMBERS, voiceToken, voiceUnderlineStyle, type Voice } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
 import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
 import { KNOWN_TITLE_CLICK_EVENT, type KnownTitleClickDetail } from "./TrackTitle";
@@ -609,55 +609,58 @@ export default function LyricsList({
               {isCurrentSection && "▶ "}[{sectionLabel}]
             </div>
           )}
-          <div className="w-fit max-w-full">
-          <p className="break-words font-medium leading-relaxed">
-            {renderWithHighlights(
-              line.original,
-              line.knownSpans,
-              line.hardSpans,
-              (span, el, matchedText) =>
-                handleKnownClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex)
-            )}
-          </p>
-          {((votesFor(line)?.length ?? 0) > 0 || vocalEditMode) && (
-            <div
-              className={
-                vocalEditMode
-                  ? `mt-0.5 flex min-h-[10px] cursor-pointer flex-col gap-[2px] rounded border border-dashed py-0.5 ${
-                      editingVocalIndex === index ? "border-zinc-800" : "border-zinc-300"
-                    }`
-                  : "mt-0.5 flex flex-col gap-[2px]"
-              }
-              aria-label="歌っている人"
-              onClick={
-                vocalEditMode
-                  ? () => {
-                      setVocalError(null);
-                      setEditingVocalIndex(index);
-                    }
-                  : undefined
-              }
-            >
-              {(votesFor(line) ?? []).map((v, i) => (
+          {(() => {
+            const lineVoices = votesFor(line) ?? [];
+            const underline = voiceUnderlineStyle(lineVoices);
+            const editing = vocalEditMode && editingVocalIndex === index;
+            return (
+              <p
+                className="break-words font-medium leading-relaxed"
+                style={underline ? { lineHeight: underline.lineHeight } : undefined}
+              >
                 <span
-                  key={i}
-                  title={`${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`}
-                  className="flex flex-col gap-px"
-                  style={{ opacity: v.role === "L" ? 1 : 0.6 }}
+                  aria-label={underline ? "歌っている人" : undefined}
+                  title={
+                    lineVoices.length > 0
+                      ? lineVoices
+                          .map(
+                            (v) =>
+                              `${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`
+                          )
+                          .join(" / ")
+                      : undefined
+                  }
+                  className={vocalEditMode ? "cursor-pointer" : undefined}
+                  style={{
+                    ...(underline?.span ?? {}),
+                    // 編集モードでは、線が無い行にも点線を出してタップ対象だと分かるようにする
+                    ...(vocalEditMode && !underline
+                      ? { borderBottom: "1px dashed #d4d4d8", paddingBottom: 2 }
+                      : {}),
+                    ...(editing ? { backgroundColor: "rgba(0,0,0,0.05)" } : {}),
+                  }}
+                  onClick={
+                    vocalEditMode
+                      ? () => {
+                          // 文字の選択（語彙登録）のためのドラッグではエディタを開かない
+                          if (!window.getSelection()?.isCollapsed) return;
+                          setVocalError(null);
+                          setEditingVocalIndex(index);
+                        }
+                      : undefined
+                  }
                 >
-                  {/* ダブルトラックは同じ色の線を2本並べる（1本のときより細くして全体の太さを揃える） */}
-                  {Array.from({ length: v.double ? 2 : 1 }, (_, k) => (
-                    <span
-                      key={k}
-                      className="block rounded-full"
-                      style={{ height: v.double ? 2 : 3, backgroundColor: MEMBERS[v.member].color }}
-                    />
-                  ))}
+                  {renderWithHighlights(
+                    line.original,
+                    line.knownSpans,
+                    line.hardSpans,
+                    (span, el, matchedText) =>
+                      handleKnownClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex)
+                  )}
                 </span>
-              ))}
-            </div>
-          )}
-          </div>
+              </p>
+            );
+          })()}
           {isSentenceEnd && line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
           )}

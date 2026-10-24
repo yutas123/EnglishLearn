@@ -61,3 +61,61 @@ export function resolveLineVoices(
   }
   return resolveVoices(vocalParts, sectionLabel);
 }
+
+type Bar = { height: number; color: string; offset: number };
+
+/**
+ * 歌っている人の下線を、文字そのものの背景として描くためのスタイル。
+ * 行が折り返しても、折り返した各行の下にそれぞれ線が付く（box-decoration-break: clone）。
+ * 戻り値の lineHeight は、線を入れるぶん行間を広げるための値。
+ */
+export function voiceUnderlineStyle(voices: Voice[]): {
+  span: React.CSSProperties;
+  lineHeight: string;
+} | null {
+  if (voices.length === 0) return null;
+
+  // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
+  const bars: Omit<Bar, "offset">[] = [];
+  voices.forEach((v, i) => {
+    // ハモリはリードより少し薄く
+    const color = v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99";
+    const heights = v.double ? [2, 2] : [3];
+    heights.forEach((height) => {
+      bars.push({ height, color });
+    });
+  });
+
+  // 下から積み上げた位置（下端からの距離）を求める
+  const withOffset: Bar[] = [];
+  let offset = 0;
+  for (let i = bars.length - 1; i >= 0; i--) {
+    withOffset.unshift({ ...bars[i], offset });
+    const sameVoiceAbove = i > 0 && isSameVoice(voices, i, i - 1);
+    offset += bars[i].height + (sameVoiceAbove ? 1 : 2);
+  }
+  const total = offset - 2 + 3; // 最上段の隙間は不要、文字との間に3px
+
+  return {
+    span: {
+      backgroundImage: withOffset.map((b) => `linear-gradient(${b.color},${b.color})`).join(","),
+      backgroundRepeat: "no-repeat",
+      backgroundSize: withOffset.map((b) => `100% ${b.height}px`).join(","),
+      backgroundPosition: withOffset.map((b) => `0 calc(100% - ${b.offset}px)`).join(","),
+      paddingBottom: total,
+      WebkitBoxDecorationBreak: "clone",
+      boxDecorationBreak: "clone",
+    } as React.CSSProperties,
+    lineHeight: `calc(1.2em + ${2 * total}px)`,
+  };
+}
+
+// bars配列のi番目とj番目が同じ人の（ダブルトラックの）2本かどうか
+function isSameVoice(voices: Voice[], i: number, j: number): boolean {
+  let index = 0;
+  const owner: number[] = [];
+  voices.forEach((v, vi) => {
+    for (let k = 0; k < (v.double ? 2 : 1); k++) owner[index++] = vi;
+  });
+  return owner[i] === owner[j];
+}
