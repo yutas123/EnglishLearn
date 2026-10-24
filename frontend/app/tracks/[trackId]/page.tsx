@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { MEMBERS, resolveLineVoices, resolveVoices } from "@/lib/beatles";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList, { type CoreSpan } from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
 import RetryLyricsButton from "../../components/RetryLyricsButton";
+import VocalEditToggle from "../../components/VocalEditToggle";
 
 export const revalidate = 3600;
 
@@ -82,6 +84,8 @@ export default async function TrackPage({
       knownSpans: findKnownSpans(line.original, matcher),
       hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
       coreSpans,
+      voices: resolveLineVoices(track.vocalParts, track.vocalOverrides, line.lineIndex, line.sectionLabel),
+      defaultVoices: resolveVoices(track.vocalParts, line.sectionLabel),
     };
   });
 
@@ -136,8 +140,41 @@ export default async function TrackPage({
           >
             ✍️
           </Link>
+          {track.album.artistName.includes("Beatles") && <VocalEditToggle />}
         </div>
       </header>
+
+      {(track.songwriterNote || track.leadVocalNote) && (
+        <section className="flex flex-col gap-1 rounded-lg border border-zinc-200 p-3 text-sm text-zinc-600">
+          {track.songwriterNote && (
+            <p>
+              <span className="mr-2 text-xs font-medium text-zinc-400">作曲</span>
+              {track.songwriterNote}
+            </p>
+          )}
+          {track.leadVocalNote && (
+            <p>
+              <span className="mr-2 text-xs font-medium text-zinc-400">リード</span>
+              {track.leadVocalNote}
+            </p>
+          )}
+          {(track.vocalParts != null || track.vocalOverrides != null) && (
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+              <span>歌詞の下線:</span>
+              {Object.values(MEMBERS).map((m) => (
+                <span key={m.name} className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-[3px] w-4 rounded-full"
+                    style={{ backgroundColor: m.color }}
+                  />
+                  {m.name}
+                </span>
+              ))}
+              <span className="text-zinc-400">濃い線=リード / 薄い線=ハモリ / 二重線=ダブルトラック</span>
+            </p>
+          )}
+        </section>
+      )}
 
       {track.analysis && (
         <details className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-600">
@@ -158,6 +195,7 @@ export default async function TrackPage({
           lines={linesWithSpans}
           title={track.title}
           artistName={track.album.artistName}
+          canEditVocals={track.album.artistName.includes("Beatles")}
         />
       )}
 

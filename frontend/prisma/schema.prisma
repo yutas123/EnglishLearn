@@ -31,6 +31,10 @@ model Track {
   title             String
   analysis          String? // 楽曲解説（generateSongAnalysis の出力）
   youtubeVideoId    String? // 書き取りモードで再生するYouTube動画ID
+  songwriterNote    String? // 作曲者表記（ビートルズ曲のみ。例: "Paul McCartney 主体（Lennon–McCartney名義）"）
+  leadVocalNote     String? // リードボーカル表記（ビートルズ曲のみ）
+  vocalParts        Json? // セクション別の歌い手 { "*": ["john:L","paul:B"], "Bridge": [...] }。配列順=音程の高い順（ビートルズ曲のみ）
+  vocalOverrides    Json? // 画面から編集した行単位の上書き { "<lineIndex>": ["john:L:2", ...] }。空配列=線なし。vocalPartsより優先
   translations      Translation[]
   highlights        Highlight[]
   vocabEntries      VocabEntry[]

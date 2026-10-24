@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
+import { MEMBERS, voiceToken, type Voice } from "@/lib/beatles";
+import VocalEditor, { type VocalScope } from "./VocalEditor";
+import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -28,6 +31,10 @@ type Line = {
   knownSpans: KnownSpan[];
   hardSpans: MatchSpan[];
   coreSpans: CoreSpan[];
+  // ビートルズ曲のみ。この行を歌っている人（音程の高い順）。空なら下線を出さない
+  voices?: Voice[];
+  // 画面で編集した上書きを消したとき（初期値に戻す）に戻る、セクション指定ベースの線
+  defaultVoices?: Voice[];
 };
 
 // マーカー層（背景色）。コアイメージ（下線層）とは独立して重ねて描画する
@@ -239,11 +246,13 @@ export default function LyricsList({
   lines,
   title,
   artistName,
+  canEditVocals = false,
 }: {
   trackId: string;
   lines: Line[];
   title: string;
   artistName: string;
+  canEditVocals?: boolean;
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -257,6 +266,68 @@ export default function LyricsList({
   });
   const [currentSectionLabel, setCurrentSectionLabel] = useState<string | null>(null);
   const [flashLineIndex, setFlashLineIndex] = useState<number | null>(null);
+
+  // 歌詞の下線の編集モード。保存した内容をすぐ画面に反映するため、行ごとの上書きをローカルにも持つ
+  // （値がnullの行は「上書きを消して初期値に戻した」状態）
+  const [vocalEditMode, setVocalEditMode] = useState(false);
+  const [editingVocalIndex, setEditingVocalIndex] = useState<number | null>(null);
+  const [localVoices, setLocalVoices] = useState<Record<number, Voice[] | null>>({});
+  const [vocalSaving, setVocalSaving] = useState(false);
+  const [vocalError, setVocalError] = useState<string | null>(null);
+
+  // ヘッダーの編集アイコン（VocalEditToggle）からの切り替えを受け取る
+  useEffect(() => {
+    if (!canEditVocals) return;
+    const onToggle = (e: Event) => {
+      setVocalEditMode(Boolean((e as CustomEvent<{ on: boolean }>).detail?.on));
+      setEditingVocalIndex(null);
+    };
+    window.addEventListener(VOCAL_EDIT_EVENT, onToggle);
+    return () => window.removeEventListener(VOCAL_EDIT_EVENT, onToggle);
+  }, [canEditVocals]);
+
+  const votesFor = (line: Line): Voice[] | undefined =>
+    line.lineIndex in localVoices
+      ? (localVoices[line.lineIndex] ?? line.defaultVoices ?? [])
+      : line.voices;
+
+  // 編集対象の行と同じ見出しで連続している行（「セクション全体」の範囲）
+  function sectionRange(index: number): Line[] {
+    const label = lines[index].sectionLabel;
+    if (!label) return [lines[index]];
+    let a = index;
+    let b = index;
+    while (a > 0 && lines[a - 1].sectionLabel === label) a--;
+    while (b < lines.length - 1 && lines[b + 1].sectionLabel === label) b++;
+    return lines.slice(a, b + 1);
+  }
+
+  async function saveVocals(index: number, scope: VocalScope, voices: Voice[] | null) {
+    const targets = scope === "section" ? sectionRange(index) : [lines[index]];
+    setVocalSaving(true);
+    setVocalError(null);
+    try {
+      const tokens = voices ? voices.map(voiceToken) : null;
+      const changes = Object.fromEntries(targets.map((l) => [String(l.lineIndex), tokens]));
+      const res = await fetch(`/api/tracks/${trackId}/vocals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => null))?.error ?? "保存に失敗しました");
+      }
+      setLocalVoices((prev) => ({
+        ...prev,
+        ...Object.fromEntries(targets.map((l) => [l.lineIndex, voices])),
+      }));
+      setEditingVocalIndex(null);
+    } catch (err) {
+      setVocalError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setVocalSaving(false);
+    }
+  }
 
   // 検索結果から #line-N 付きで遷移してきたとき、その行へスクロールして一瞬ハイライトする
   useEffect(() => {
@@ -728,6 +799,7 @@ export default function LyricsList({
               {isCurrentSection && "▶ "}[{sectionLabel}]
             </div>
           )}
+          <div className="w-fit max-w-full">
           <p className="break-words font-medium leading-relaxed">
             {renderWithHighlights(
               line.original,
@@ -740,6 +812,45 @@ export default function LyricsList({
                 handleCoreClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex, alsoKnown)
             )}
           </p>
+          {((votesFor(line)?.length ?? 0) > 0 || vocalEditMode) && (
+            <div
+              className={
+                vocalEditMode
+                  ? `mt-0.5 flex min-h-[10px] cursor-pointer flex-col gap-[2px] rounded border border-dashed py-0.5 ${
+                      editingVocalIndex === index ? "border-zinc-800" : "border-zinc-300"
+                    }`
+                  : "mt-0.5 flex flex-col gap-[2px]"
+              }
+              aria-label="歌っている人"
+              onClick={
+                vocalEditMode
+                  ? () => {
+                      setVocalError(null);
+                      setEditingVocalIndex(index);
+                    }
+                  : undefined
+              }
+            >
+              {(votesFor(line) ?? []).map((v, i) => (
+                <span
+                  key={i}
+                  title={`${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`}
+                  className="flex flex-col gap-px"
+                  style={{ opacity: v.role === "L" ? 1 : 0.6 }}
+                >
+                  {/* ダブルトラックは同じ色の線を2本並べる（1本のときより細くして全体の太さを揃える） */}
+                  {Array.from({ length: v.double ? 2 : 1 }, (_, k) => (
+                    <span
+                      key={k}
+                      className="block rounded-full"
+                      style={{ height: v.double ? 2 : 3, backgroundColor: MEMBERS[v.member].color }}
+                    />
+                  ))}
+                </span>
+              ))}
+            </div>
+          )}
+          </div>
           {isSentenceEnd && line.translation && (
             <p className="break-words text-sm text-zinc-500">{line.translation}</p>
           )}
@@ -752,6 +863,21 @@ export default function LyricsList({
         </div>
         );
       })}
+
+      {vocalEditMode && editingVocalIndex !== null && lines[editingVocalIndex] && (
+        <VocalEditor
+          key={editingVocalIndex}
+          lineText={lines[editingVocalIndex].original}
+          initialVoices={votesFor(lines[editingVocalIndex]) ?? []}
+          sectionLabel={lines[editingVocalIndex].sectionLabel}
+          sectionLineCount={sectionRange(editingVocalIndex).length}
+          saving={vocalSaving}
+          error={vocalError}
+          onSave={(voices, scope) => saveVocals(editingVocalIndex, scope, voices)}
+          onReset={(scope) => saveVocals(editingVocalIndex, scope, null)}
+          onClose={() => setEditingVocalIndex(null)}
+        />
+      )}
 
       {selection && (
         <div

@@ -1,0 +1,814 @@
+{
+  "_readme": "ビートルズ曲のクレジット。キーは曲名。parts のキーはセクション見出し(コロンより前)で 'Verse 1'→'Verse'→'*' の順にフォールバック。値は 'member:L'(リード) / 'member:H'(ハモリ=リードと同じ歌詞を重ねる声)の配列(音程の高い順。不明なら リード→ハモリ)。コーラス/掛け合い(ooh・sha-la-la・応答)は線を引かない方針で含めない。sections:'unverified' はセクション別の割り当てが出典に無く、曲全体の編成を全行に当てはめている曲。",
+  "I Saw Her Standing There": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義。Paulが原案、Johnが歌詞を少し手伝った）",
+    "lead": "Paul McCartney（Johnがハーモニー）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ],
+      "Bridge": [
+        "paul:L",
+        "john:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "john:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I_Saw_Her_Standing_There"
+  },
+  "Misery": {
+    "writer": "完全な共作（Lennon–McCartney。Johnは「John寄りだが共作」、Paulは「どちらも主導しなかった」と発言）",
+    "lead": "John Lennon と Paul McCartney（共同リード）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Misery_(Beatles_song)"
+  },
+  "Anna (Go to Him)": {
+    "writer": "カバー曲（原曲: Arthur Alexander）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Anna_(Go_to_Him)"
+  },
+  "Chains": {
+    "writer": "カバー曲（Gerry Goffin / Carole King、The Cookiesの曲）",
+    "lead": "George Harrison",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/chains/"
+  },
+  "Boys": {
+    "writer": "カバー曲（Luther Dixon / Wes Farrell、The Shirellesの曲）",
+    "lead": "Ringo Starr（ビートルズ初のRingoリード録音）",
+    "parts": {
+      "*": [
+        "ringo:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Boys_(Shirelles_song)"
+  },
+  "Ask Me Why": {
+    "writer": "John Lennon 主体（Lennon–McCartney名義）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Ask_Me_Why"
+  },
+  "Please Please Me": {
+    "writer": "John Lennon 主体（Lennon–McCartney名義）",
+    "lead": "John Lennon（Paul McCartneyが高音ハーモニー）",
+    "parts": {
+      "*": [
+        "paul:H",
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Please_Please_Me_(song)"
+  },
+  "Love Me Do": {
+    "writer": "Paul McCartney 主体（Aメロとサビ）＋ John Lennon（中間部）（Lennon–McCartney名義）",
+    "lead": "Paul McCartney と John Lennon（共同リード。タイトルフレーズの無伴奏部分はPaul）",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Love_Me_Do"
+  },
+  "P.S. I Love You": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義）",
+    "lead": "Paul McCartney",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/P.S._I_Love_You_(Beatles_song)"
+  },
+  "Baby It’s You": {
+    "writer": "カバー曲（Burt Bacharach / Mack David / Barney Williams、The Shirellesの曲）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Baby_It%27s_You"
+  },
+  "Do You Want to Know a Secret": {
+    "writer": "John Lennon 主体（Lennon–McCartney名義）",
+    "lead": "George Harrison",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Do_You_Want_to_Know_a_Secret%3F"
+  },
+  "A Taste of Honey": {
+    "writer": "カバー曲（Bobby Scott / Ric Marlow）",
+    "lead": "Paul McCartney（ダブルトラック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/A_Taste_of_Honey_(song)"
+  },
+  "There’s a Place": {
+    "writer": "John Lennon 主体（Lewisohn、Everettら）。Paulは「自分の原案が元で共作」と回想（Lennon–McCartney名義）",
+    "lead": "John Lennon（低音）と Paul McCartney（高音）の二声（Johnの単独リードの部分あり）",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/There%27s_a_Place"
+  },
+  "Twist and Shout": {
+    "writer": "カバー曲（Phil Medley / Bert Russell、The Top Notesの曲）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Twist_and_Shout"
+  },
+  "It Won’t Be Long": {
+    "writer": "John Lennon 主体（Paulが歌詞とアレンジを補助。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/It_Won%27t_Be_Long"
+  },
+  "All I’ve Got to Do": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/All_I%27ve_Got_to_Do"
+  },
+  "All My Loving": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/All_My_Loving"
+  },
+  "Don’t Bother Me": {
+    "writer": "George Harrison（ビートルズでのGeorge初の自作曲）",
+    "lead": "George Harrison（ダブルトラック）",
+    "parts": {
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Don%27t_Bother_Me"
+  },
+  "Little Child": {
+    "writer": "共作（Lennon–McCartney。Ringoのために書かれた）",
+    "lead": "John Lennon と Paul McCartney（Beatles Bible: 二人で歌唱を分担、Wikipedia: 主にJohnと推測）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/little-child/"
+  },
+  "Till There Was You": {
+    "writer": "カバー曲（Meredith Willson、ミュージカル『The Music Man』の曲）",
+    "lead": "Paul McCartney",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Till_There_Was_You"
+  },
+  "Please Mister Postman": {
+    "writer": "カバー曲（Brian Holland ら、The Marvelettesの曲）",
+    "lead": "John Lennon（ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Please_Mr._Postman"
+  },
+  "Roll Over Beethoven": {
+    "writer": "カバー曲（Chuck Berry）",
+    "lead": "George Harrison（ダブルトラック）",
+    "parts": {
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Roll_Over_Beethoven"
+  },
+  "Hold Me Tight": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義。Johnは「That was Paul's」と発言）",
+    "lead": "Paul McCartney",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/hold-me-tight/"
+  },
+  "You Really Got a Hold on Me": {
+    "writer": "カバー曲（Smokey Robinson、The Miraclesの曲）",
+    "lead": "John Lennon と George Harrison（Paul McCartneyがハーモニー）",
+    "parts": {
+      "*": [
+        "john:L",
+        "george:L",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/You_Really_Got_a_Hold_on_Me"
+  },
+  "I Wanna Be Your Man": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義。Johnが仕上げに協力。Rolling Stonesにも提供）",
+    "lead": "Ringo Starr（ダブルトラック）",
+    "parts": {
+      "*": [
+        "ringo:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I_Wanna_Be_Your_Man"
+  },
+  "Devil in Her Heart": {
+    "writer": "カバー曲（Richard Drapkin、The Donaysの曲）",
+    "lead": "George Harrison（ダブルトラック）",
+    "parts": {
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Devil_in_Her_Heart"
+  },
+  "Not a Second Time": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Not_a_Second_Time"
+  },
+  "Money (That’s What I Want)": {
+    "writer": "カバー曲（Janie Bradford / Berry Gordy）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Money_(That%27s_What_I_Want)"
+  },
+  "A Hard Day’s Night": {
+    "writer": "John Lennon 主体（Paulが軽く協力。Lennon–McCartney名義）",
+    "lead": "John Lennon（Verse）、Paul McCartney（中間部）。Verseは Paul（高）と John（低）のハーモニー",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ],
+      "Verse": [
+        "paul:H:2",
+        "john:L:2"
+      ],
+      "Bridge": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://en.wikipedia.org/wiki/A_Hard_Day%27s_Night_(song)"
+  },
+  "I Should Have Known Better": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。Paulは歌っていない）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I_Should_Have_Known_Better"
+  },
+  "If I Fell": {
+    "writer": "John Lennon 主体（Paulも「二人で書いた」と発言。Lennon–McCartney名義）",
+    "lead": "John Lennon（冒頭は単独、以降はPaulとの近接ハーモニー）",
+    "parts": {
+      "*": [
+        "john:L:2",
+        "paul:H:2"
+      ],
+      "Intro": [
+        "john:L:2"
+      ]
+    },
+    "source": "https://en.wikipedia.org/wiki/If_I_Fell"
+  },
+  "I’m Happy Just to Dance with You": {
+    "writer": "Lennon–McCartney（Georgeのために書かれた）",
+    "lead": "George Harrison",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I%27m_Happy_Just_to_Dance_with_You"
+  },
+  "And I Love Her": {
+    "writer": "Paul McCartney 主体（Johnは中間部を自分の貢献と主張、Paulは否定。Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/And_I_Love_Her"
+  },
+  "Tell Me Why": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（コーラス部分はPaul・Georgeと三声）",
+    "parts": {
+      "*": [
+        "john:L"
+      ],
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "source": "https://en.wikipedia.org/wiki/Tell_Me_Why_(Beatles_song)"
+  },
+  "Can’t Buy Me Love": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック。最終版にバックの背景ハーモニーは無い）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Can%27t_Buy_Me_Love"
+  },
+  "Any Time at All": {
+    "writer": "John Lennon 主体（中間部の器楽はPaul）（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビの後半フレーズはPaulが歌う）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Any_Time_at_All"
+  },
+  "I’ll Cry Instead": {
+    "writer": "John Lennon（本人・Paul双方が「完全にJohn」と証言。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I%27ll_Cry_Instead"
+  },
+  "Things We Said Today": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）。Georgeがハーモニー（出典は演奏者一覧のみ）",
+    "parts": {
+      "*": [
+        "paul:L:2",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Things_We_Said_Today"
+  },
+  "When I Get Home": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビの出だしのみ三人でハーモニー。範囲が不明なため線は引かない）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/when-i-get-home/"
+  },
+  "You Can’t Do That": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。Paul・Georgeは掛け合いのコーラス）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/you-cant-do-that/"
+  },
+  "I’ll Be Back": {
+    "writer": "John Lennon 主体（Paulは「共作だがJohnの案が中心」と発言。Lennon–McCartney名義）",
+    "lead": "John Lennon（PaulとGeorgeがハーモニー、ダブルトラックあり）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/ill-be-back/"
+  },
+  "No Reply": {
+    "writer": "John Lennon 主体（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）。Paulが高音、Johnが低音のハーモニー",
+    "parts": {
+      "*": [
+        "paul:H",
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/No_Reply_(song)"
+  },
+  "I’m a Loser": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（Paulがハーモニー）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I%27m_a_Loser"
+  },
+  "Baby’s In Black": {
+    "writer": "共作（Lennon–McCartney。二人が同じマイクで同時に歌唱）",
+    "lead": "John Lennon と Paul McCartney（同じマイクで同時に歌い、どちらもメインメロディと発言）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Baby%27s_in_Black"
+  },
+  "Rock and Roll Music": {
+    "writer": "カバー曲（Chuck Berry）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Rock_and_Roll_Music_(song)"
+  },
+  "I’ll Follow the Sun": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（Johnがハーモニー）",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I%27ll_Follow_the_Sun"
+  },
+  "Mr. Moonlight": {
+    "writer": "カバー曲（Roy Lee Johnson）",
+    "lead": "John Lennon（PaulとGeorgeがハーモニー）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/mr-moonlight/"
+  },
+  "Kansas City/Hey-Hey-Hey-Hey!": {
+    "writer": "カバー曲（Leiber & Stoller / Little Richard）",
+    "lead": "Paul McCartney（JohnとGeorgeは掛け合いのコーラス）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/kansas-city-hey-hey-hey-hey/"
+  },
+  "Eight Days a Week": {
+    "writer": "Paul McCartney 原案の共作（Lennon–McCartney名義）",
+    "lead": "John Lennon を中心に Paul・George が声を重ねる（出典に誰がリードか明記なし）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Eight_Days_a_Week_(song)"
+  },
+  "Words of Love": {
+    "writer": "カバー曲（Buddy Holly）",
+    "lead": "John Lennon と Paul McCartney（歌唱を分担）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/words-of-love/"
+  },
+  "Honey Don’t": {
+    "writer": "カバー曲（Carl Perkins）",
+    "lead": "Ringo Starr",
+    "parts": {
+      "*": [
+        "ringo:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Honey_Don%27t"
+  },
+  "Every Little Thing": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義。Johnも一部）",
+    "lead": "Paul McCartney（Johnがハーモニー）。出典によってJohnがリードとの記述もあり",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Every_Little_Thing_(Beatles_song)"
+  },
+  "I Don’t Want to Spoil the Party": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ハーモニー歌手は出典で割れる: Paul / George / Johnの二重録音。そのため線は引かない）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I_Don%27t_Want_to_Spoil_the_Party"
+  },
+  "What You’re Doing": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（JohnとGeorgeがハーモニー）",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/What_You%27re_Doing"
+  },
+  "Everybody’s Trying to Be My Baby": {
+    "writer": "カバー曲（Carl Perkins）",
+    "lead": "George Harrison（ダブルトラック）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Everybody%27s_Trying_to_Be_My_Baby"
+  },
+  "Help!": {
+    "writer": "John Lennon 主体（Paulが対旋律などを補助。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。Paul・Georgeは応答するバックのコーラス）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Help!_(song)"
+  },
+  "The Night Before": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）。JohnとGeorgeがハーモニー",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/the-night-before/"
+  },
+  "You’ve Got to Hide Your Love Away": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（独唱。バックの声は無い）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/You%27ve_Got_to_Hide_Your_Love_Away"
+  },
+  "I Need You": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。JohnとPaulがハーモニー）",
+    "parts": {
+      "*": [
+        "george:L:2",
+        "john:H",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I_Need_You_(Beatles_song)"
+  },
+  "Another Girl": {
+    "writer": "Paul McCartney 主体（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）。John・Georgeと三声ハーモニー（Johnが最高音）",
+    "parts": {
+      "*": [
+        "john:H",
+        "paul:L:2",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Another_Girl"
+  },
+  "You’re Going to Lose That Girl": {
+    "writer": "John Lennon 主体（Paulが4割ほど関与との証言。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。Paul・Georgeは応答するバックのコーラス）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/You%27re_Going_to_Lose_That_Girl"
+  },
+  "Ticket to Ride": {
+    "writer": "John Lennon 主体（Johnは「4分の3は自分」、Paulは「Johnが6割」と発言。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。Paulがハーモニー）",
+    "parts": {
+      "*": [
+        "john:L:2",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Ticket_to_Ride_(song)"
+  },
+  "Act Naturally": {
+    "writer": "カバー曲（Johnny Russell / Voni Morrison、Buck Owensの曲）",
+    "lead": "Ringo Starr（Paulがハーモニー）",
+    "parts": {
+      "*": [
+        "ringo:L",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Act_Naturally"
+  },
+  "It’s Only Love": {
+    "writer": "John Lennon 主体（Paulが共作者として協力。Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://www.beatlesbible.com/songs/its-only-love/"
+  },
+  "You Like Me Too Much": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。Paulはバック）",
+    "parts": {
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/You_Like_Me_Too_Much"
+  },
+  "Tell Me What You See": {
+    "writer": "Paul McCartney 主体（Paul自身は「6対4でPaul」、Johnは「Paulの曲」と発言。Lennon–McCartney名義）",
+    "lead": "Paul McCartney（Johnがハーモニー）",
+    "parts": {
+      "*": [
+        "paul:L:2",
+        "john:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Tell_Me_What_You_See"
+  },
+  "I’ve Just Seen a Face": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/I%27ve_Just_Seen_a_Face"
+  },
+  "Yesterday": {
+    "writer": "Paul McCartney（Lennon–McCartney名義。Johnも「Paulがほぼ全部書いた」と発言）",
+    "lead": "Paul McCartney（独唱）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Yesterday_(Beatles_song)"
+  },
+  "Dizzy Miss Lizzy": {
+    "writer": "カバー曲（Larry Williams）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://en.wikipedia.org/wiki/Dizzy_Miss_Lizzy"
+  }
+}
