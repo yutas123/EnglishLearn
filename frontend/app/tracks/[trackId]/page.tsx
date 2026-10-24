@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { MEMBERS, resolveLineVoices, resolveVoices } from "@/lib/beatles";
+import { MEMBERS, resolveLineParts, resolveVoices } from "@/lib/beatles";
 import { buildMatcher, findKnownSpans, type MatchSpan } from "@/lib/vocabMatcher";
 import LyricsList from "../../components/LyricsList";
 import SpotifyRemote from "../../components/SpotifyRemote";
@@ -55,8 +55,16 @@ export default async function TrackPage({
       ...line,
       knownSpans: findKnownSpans(line.original, matcher),
       hardSpans: (line.hardSpans as MatchSpan[] | null) ?? [],
-      voices: resolveLineVoices(track.vocalParts, track.vocalOverrides, line.lineIndex, line.sectionLabel),
-      defaultVoices: resolveVoices(track.vocalParts, line.sectionLabel),
+      parts: resolveLineParts(
+        track.vocalParts,
+        track.vocalOverrides,
+        line.lineIndex,
+        line.sectionLabel,
+        line.original.length
+      ),
+      defaultParts: [
+        { end: line.original.length, voices: resolveVoices(track.vocalParts, line.sectionLabel) },
+      ],
     };
   });
 

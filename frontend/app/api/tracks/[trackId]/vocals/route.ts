@@ -5,10 +5,30 @@ import { prisma } from "@/lib/db";
 
 const TOKEN_PATTERN = /^(john|paul|george|ringo):[LH](:2)?$/;
 
+type Change = string[] | { parts: { end: number; v: string[] }[] } | null;
+
+const isTokens = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.length <= 4 && v.every((t) => typeof t === "string" && TOKEN_PATTERN.test(t));
+
+function isValidChange(value: unknown): value is Change {
+  if (value === null || isTokens(value)) return true;
+  const parts = (value as { parts?: unknown } | undefined)?.parts;
+  return (
+    Array.isArray(parts) &&
+    parts.length >= 1 &&
+    parts.length <= 20 &&
+    parts.every(
+      (p) =>
+        Number.isInteger(p?.end) && p.end > 0 && p.end <= 1000 && isTokens(p.v)
+    )
+  );
+}
+
 /**
  * 歌詞の下線（誰が歌っているか）の行単位の上書きを保存する。
- * body: { changes: { "<lineIndex>": ["john:L:2", ...] | null } }
- * 配列は「その行の線の構成（空配列=線なし）」、nullは「上書きを消して初期値に戻す」。
+ * body: { changes: { "<lineIndex>": ["john:L:2", ...] | { parts: [{ end, v: [...] }] } | null } }
+ * 配列は「その行全体の線の構成（空配列=線なし）」、parts は「行内を文字位置で区切った部分ごとの構成」
+ * （end は部分の終わりの文字位置）、nullは「上書きを消して初期値に戻す」。
  */
 export async function POST(
   req: NextRequest,
@@ -25,12 +45,7 @@ export async function POST(
     if (!/^\d+$/.test(key)) {
       return NextResponse.json({ error: "行番号が不正です" }, { status: 400 });
     }
-    const ok =
-      value === null ||
-      (Array.isArray(value) &&
-        value.length <= 4 &&
-        value.every((t) => typeof t === "string" && TOKEN_PATTERN.test(t)));
-    if (!ok) {
+    if (!isValidChange(value)) {
       return NextResponse.json({ error: "線の指定が不正です" }, { status: 400 });
     }
   }
@@ -43,10 +58,10 @@ export async function POST(
     return NextResponse.json({ error: "曲が見つかりません" }, { status: 404 });
   }
 
-  const merged: Record<string, string[]> = {
-    ...((track.vocalOverrides as Record<string, string[]> | null) ?? {}),
+  const merged: Record<string, Exclude<Change, null>> = {
+    ...((track.vocalOverrides as Record<string, Exclude<Change, null>> | null) ?? {}),
   };
-  for (const [key, value] of Object.entries(changes as Record<string, string[] | null>)) {
+  for (const [key, value] of Object.entries(changes as Record<string, Change>)) {
     if (value === null) delete merged[key];
     else merged[key] = value;
   }

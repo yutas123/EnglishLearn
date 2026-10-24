@@ -44,40 +44,58 @@ export function voiceToken(v: Voice): string {
   return `${v.member}:${v.role}${v.double ? ":2" : ""}`;
 }
 
+/**
+ * 行の一部分だけに歌い手を割り当てるための単位。end は行内の文字位置（その位置の手前まで）。
+ * 先頭からの区切りで、最後のパートは行末まで。分割していない行は1パートだけになる。
+ */
+export type VoicePart = { end: number; voices: Voice[] };
+
+function parseTokens(tokens: unknown): Voice[] {
+  if (!Array.isArray(tokens)) return [];
+  return tokens
+    .map((t) => (typeof t === "string" ? parseVoice(t) : null))
+    .filter((v): v is Voice => v !== null);
+}
+
 /** 画面で編集した行単位の上書き（vocalOverrides）を、セクション指定より優先して引く */
-export function resolveLineVoices(
+export function resolveLineParts(
   vocalParts: unknown,
   vocalOverrides: unknown,
   lineIndex: number,
-  sectionLabel: string | null
-): Voice[] {
+  sectionLabel: string | null,
+  lineLength: number
+): VoicePart[] {
   if (vocalOverrides && typeof vocalOverrides === "object") {
-    const tokens = (vocalOverrides as Record<string, unknown>)[String(lineIndex)];
-    if (Array.isArray(tokens)) {
-      return tokens
-        .map((t) => (typeof t === "string" ? parseVoice(t) : null))
-        .filter((v): v is Voice => v !== null);
+    const value = (vocalOverrides as Record<string, unknown>)[String(lineIndex)];
+    // 旧形式: 行全体の歌い手の配列
+    if (Array.isArray(value)) return [{ end: lineLength, voices: parseTokens(value) }];
+    // 部分指定: { parts: [{ end, v: [...] }, ...] }
+    const parts = (value as { parts?: unknown } | null | undefined)?.parts;
+    if (Array.isArray(parts) && parts.length > 0) {
+      const result: VoicePart[] = [];
+      let prev = 0;
+      parts.forEach((p, i) => {
+        const end =
+          i === parts.length - 1 ? lineLength : Math.min(lineLength, Number((p as { end?: unknown })?.end));
+        if (!(end > prev)) return;
+        result.push({ end, voices: parseTokens((p as { v?: unknown })?.v) });
+        prev = end;
+      });
+      if (result.length > 0) {
+        result[result.length - 1].end = lineLength;
+        return result;
+      }
     }
   }
-  return resolveVoices(vocalParts, sectionLabel);
+  return [{ end: lineLength, voices: resolveVoices(vocalParts, sectionLabel) }];
 }
 
 type Bar = { height: number; color: string; offset: number };
 
-/**
- * 歌っている人の下線を、文字そのものの背景として描くためのスタイル。
- * 行が折り返しても、折り返した各行の下にそれぞれ線が付く（box-decoration-break: clone）。
- * 戻り値の lineHeight は、線を入れるぶん行間を広げるための値。
- */
-export function voiceUnderlineStyle(voices: Voice[]): {
-  span: React.CSSProperties;
-  lineHeight: string;
-} | null {
-  if (voices.length === 0) return null;
-
+function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
   // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
   const bars: Omit<Bar, "offset">[] = [];
-  voices.forEach((v, i) => {
+  voices.forEach((v) => {
     // ハモリはリードより少し薄く
     const color = v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99";
     const heights = v.double ? [2, 2] : [3];
@@ -94,19 +112,49 @@ export function voiceUnderlineStyle(voices: Voice[]): {
     const sameVoiceAbove = i > 0 && isSameVoice(voices, i, i - 1);
     offset += bars[i].height + (sameVoiceAbove ? 1 : 2);
   }
-  const total = offset - 2 + 3; // 最上段の隙間は不要、文字との間に3px
+  return { bars: withOffset, total: offset - 2 + 3 }; // 最上段の隙間は不要、文字との間に3px
+}
+
+/** 下線ぶんの高さ（文字との間隔を含む）。voices が空なら 0 */
+export function underlineTotal(voices: Voice[]): number {
+  return voices.length === 0 ? 0 : layoutBars(voices).total;
+}
+
+/**
+ * 歌っている人の下線を、文字そのものの背景として描くためのスタイル。
+ * 行が折り返しても、折り返した各行の下にそれぞれ線が付く（box-decoration-break: clone）。
+ * padTo は線のために空ける高さ。1行の中で部分ごとに線の本数が違うとき、
+ * 全部分に同じ値（最大値）を渡すと、線の位置と行間が揃う。
+ * 戻り値の lineHeight は、線を入れるぶん行間を広げるための値。
+ */
+export function voiceUnderlineStyle(
+  voices: Voice[],
+  padTo?: number
+): {
+  span: React.CSSProperties;
+  lineHeight: string;
+} | null {
+  if (voices.length === 0 && !padTo) return null;
+
+  const { bars, total } = voices.length > 0 ? layoutBars(voices) : { bars: [], total: 0 };
+  const pad = Math.max(total, padTo ?? 0);
+  const base = {
+    paddingBottom: pad,
+    WebkitBoxDecorationBreak: "clone",
+    boxDecorationBreak: "clone",
+  };
 
   return {
-    span: {
-      backgroundImage: withOffset.map((b) => `linear-gradient(${b.color},${b.color})`).join(","),
-      backgroundRepeat: "no-repeat",
-      backgroundSize: withOffset.map((b) => `100% ${b.height}px`).join(","),
-      backgroundPosition: withOffset.map((b) => `0 calc(100% - ${b.offset}px)`).join(","),
-      paddingBottom: total,
-      WebkitBoxDecorationBreak: "clone",
-      boxDecorationBreak: "clone",
-    } as React.CSSProperties,
-    lineHeight: `calc(1.2em + ${2 * total}px)`,
+    span: (bars.length === 0
+      ? base
+      : {
+          ...base,
+          backgroundImage: bars.map((b) => `linear-gradient(${b.color},${b.color})`).join(","),
+          backgroundRepeat: "no-repeat",
+          backgroundSize: bars.map((b) => `100% ${b.height}px`).join(","),
+          backgroundPosition: bars.map((b) => `0 calc(100% - ${b.offset}px)`).join(","),
+        }) as React.CSSProperties,
+    lineHeight: `calc(1.2em + ${2 * pad}px)`,
   };
 }
 

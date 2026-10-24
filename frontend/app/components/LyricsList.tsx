@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KnownSpan, MatchSpan } from "@/lib/vocabMatcher";
 import { sameTrackTitle } from "@/lib/trackTitle";
-import { MEMBERS, voiceToken, voiceUnderlineStyle, type Voice } from "@/lib/beatles";
+import {
+  MEMBERS,
+  voiceToken,
+  voiceUnderlineStyle,
+  underlineTotal,
+  type VoicePart,
+} from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
 import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
 import { KNOWN_TITLE_CLICK_EVENT, type KnownTitleClickDetail } from "./TrackTitle";
@@ -21,10 +27,10 @@ type Line = {
   sectionLabel: string | null;
   knownSpans: KnownSpan[];
   hardSpans: MatchSpan[];
-  // ビートルズ曲のみ。この行を歌っている人（音程の高い順）。空なら下線を出さない
-  voices?: Voice[];
+  // ビートルズ曲のみ。この行を歌っている人（音程の高い順）を、行内の部分ごとに持つ。空なら下線を出さない
+  parts?: VoicePart[];
   // 画面で編集した上書きを消したとき（初期値に戻す）に戻る、セクション指定ベースの線
-  defaultVoices?: Voice[];
+  defaultParts?: VoicePart[];
 };
 
 // マーカー層（背景色）
@@ -181,7 +187,7 @@ export default function LyricsList({
   // （値がnullの行は「上書きを消して初期値に戻した」状態）
   const [vocalEditMode, setVocalEditMode] = useState(false);
   const [editingVocalIndex, setEditingVocalIndex] = useState<number | null>(null);
-  const [localVoices, setLocalVoices] = useState<Record<number, Voice[] | null>>({});
+  const [localVoices, setLocalVoices] = useState<Record<number, VoicePart[] | null>>({});
   const [vocalSaving, setVocalSaving] = useState(false);
   const [vocalError, setVocalError] = useState<string | null>(null);
 
@@ -196,10 +202,10 @@ export default function LyricsList({
     return () => window.removeEventListener(VOCAL_EDIT_EVENT, onToggle);
   }, [canEditVocals]);
 
-  const votesFor = (line: Line): Voice[] | undefined =>
-    line.lineIndex in localVoices
-      ? (localVoices[line.lineIndex] ?? line.defaultVoices ?? [])
-      : line.voices;
+  const partsFor = (line: Line): VoicePart[] =>
+    (line.lineIndex in localVoices
+      ? (localVoices[line.lineIndex] ?? line.defaultParts)
+      : line.parts) ?? [{ end: line.original.length, voices: [] }];
 
   // 編集対象の行と同じ見出しで連続している行（「セクション全体」の範囲）
   function sectionRange(index: number): Line[] {
@@ -212,13 +218,23 @@ export default function LyricsList({
     return lines.slice(a, b + 1);
   }
 
-  async function saveVocals(index: number, scope: VocalScope, voices: Voice[] | null) {
+  async function saveVocals(index: number, scope: VocalScope, parts: VoicePart[] | null) {
     const targets = scope === "section" ? sectionRange(index) : [lines[index]];
+    // セクション全体への適用は行全体の歌い手のみ（部分指定は文字位置に依存するため行単位）
+    const partsOf = (l: (typeof lines)[number]): VoicePart[] | null =>
+      parts && scope === "section" ? [{ end: l.original.length, voices: parts[0].voices }] : parts;
     setVocalSaving(true);
     setVocalError(null);
     try {
-      const tokens = voices ? voices.map(voiceToken) : null;
-      const changes = Object.fromEntries(targets.map((l) => [String(l.lineIndex), tokens]));
+      const serialize = (p: VoicePart[] | null) =>
+        !p
+          ? null
+          : p.length === 1
+            ? p[0].voices.map(voiceToken)
+            : { parts: p.map((x) => ({ end: x.end, v: x.voices.map(voiceToken) })) };
+      const changes = Object.fromEntries(
+        targets.map((l) => [String(l.lineIndex), serialize(partsOf(l))])
+      );
       const res = await fetch(`/api/tracks/${trackId}/vocals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -229,7 +245,7 @@ export default function LyricsList({
       }
       setLocalVoices((prev) => ({
         ...prev,
-        ...Object.fromEntries(targets.map((l) => [l.lineIndex, voices])),
+        ...Object.fromEntries(targets.map((l) => [l.lineIndex, partsOf(l)])),
       }));
       setEditingVocalIndex(null);
     } catch (err) {
@@ -622,54 +638,75 @@ export default function LyricsList({
             </div>
           )}
           {(() => {
-            const lineVoices = votesFor(line) ?? [];
-            const underline = voiceUnderlineStyle(lineVoices);
+            const lineParts = partsFor(line);
+            // 部分ごとに線の本数が違っても線の位置・行間が揃うよう、最大の高さに合わせる
+            const pad = Math.max(...lineParts.map((p) => underlineTotal(p.voices)));
+            const hasUnderline = pad > 0;
             const editing = vocalEditMode && editingVocalIndex === index;
+            let start = 0;
             return (
               <p
                 className="break-words font-medium leading-relaxed"
-                style={underline ? { lineHeight: underline.lineHeight } : undefined}
+                style={hasUnderline ? { lineHeight: voiceUnderlineStyle([], pad)?.lineHeight } : undefined}
               >
-                <span
-                  aria-label={underline ? "歌っている人" : undefined}
-                  title={
-                    lineVoices.length > 0
-                      ? lineVoices
-                          .map(
-                            (v) =>
-                              `${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`
+                {lineParts.map((part, pi) => {
+                  const from = start;
+                  const to = part.end;
+                  start = to;
+                  const underline = voiceUnderlineStyle(part.voices, hasUnderline ? pad : undefined);
+                  const shift = <T extends { start: number; end: number }>(spans: T[]): T[] =>
+                    spans
+                      .filter((sp) => sp.start >= from && sp.end <= to)
+                      .map((sp) => ({ ...sp, start: sp.start - from, end: sp.end - from }));
+                  return (
+                    <span
+                      key={pi}
+                      aria-label={part.voices.length > 0 ? "歌っている人" : undefined}
+                      title={
+                        part.voices.length > 0
+                          ? part.voices
+                              .map(
+                                (v) =>
+                                  `${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`
+                              )
+                              .join(" / ")
+                          : undefined
+                      }
+                      className={vocalEditMode ? "cursor-pointer" : undefined}
+                      style={{
+                        ...(underline?.span ?? {}),
+                        // 編集モードでは、線が無い行にも点線を出してタップ対象だと分かるようにする
+                        ...(vocalEditMode && !hasUnderline
+                          ? { borderBottom: "1px dashed #d4d4d8", paddingBottom: 2 }
+                          : {}),
+                        ...(editing ? { backgroundColor: "rgba(0,0,0,0.05)" } : {}),
+                      }}
+                      onClick={
+                        vocalEditMode
+                          ? () => {
+                              // 文字の選択（語彙登録）のためのドラッグではエディタを開かない
+                              if (!window.getSelection()?.isCollapsed) return;
+                              setVocalError(null);
+                              setEditingVocalIndex(index);
+                            }
+                          : undefined
+                      }
+                    >
+                      {renderWithHighlights(
+                        line.original.slice(from, to),
+                        shift(line.knownSpans),
+                        shift(line.hardSpans),
+                        (span, el, matchedText) =>
+                          handleKnownClick(
+                            { ...span, start: span.start + from, end: span.end + from },
+                            el.getBoundingClientRect(),
+                            matchedText,
+                            line.lineIndex
                           )
-                          .join(" / ")
-                      : undefined
-                  }
-                  className={vocalEditMode ? "cursor-pointer" : undefined}
-                  style={{
-                    ...(underline?.span ?? {}),
-                    // 編集モードでは、線が無い行にも点線を出してタップ対象だと分かるようにする
-                    ...(vocalEditMode && !underline
-                      ? { borderBottom: "1px dashed #d4d4d8", paddingBottom: 2 }
-                      : {}),
-                    ...(editing ? { backgroundColor: "rgba(0,0,0,0.05)" } : {}),
-                  }}
-                  onClick={
-                    vocalEditMode
-                      ? () => {
-                          // 文字の選択（語彙登録）のためのドラッグではエディタを開かない
-                          if (!window.getSelection()?.isCollapsed) return;
-                          setVocalError(null);
-                          setEditingVocalIndex(index);
-                        }
-                      : undefined
-                  }
-                >
-                  {renderWithHighlights(
-                    line.original,
-                    line.knownSpans,
-                    line.hardSpans,
-                    (span, el, matchedText) =>
-                      handleKnownClick(span, el.getBoundingClientRect(), matchedText, line.lineIndex)
-                  )}
-                </span>
+                      )}
+                    </span>
+                  );
+                })}
               </p>
             );
           })()}
@@ -690,12 +727,12 @@ export default function LyricsList({
         <VocalEditor
           key={editingVocalIndex}
           lineText={lines[editingVocalIndex].original}
-          initialVoices={votesFor(lines[editingVocalIndex]) ?? []}
+          initialParts={partsFor(lines[editingVocalIndex])}
           sectionLabel={lines[editingVocalIndex].sectionLabel}
           sectionLineCount={sectionRange(editingVocalIndex).length}
           saving={vocalSaving}
           error={vocalError}
-          onSave={(voices, scope) => saveVocals(editingVocalIndex, scope, voices)}
+          onSave={(parts, scope) => saveVocals(editingVocalIndex, scope, parts)}
           onReset={(scope) => saveVocals(editingVocalIndex, scope, null)}
           onClose={() => setEditingVocalIndex(null)}
         />
