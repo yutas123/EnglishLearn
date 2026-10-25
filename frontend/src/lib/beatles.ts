@@ -128,6 +128,44 @@ export function applySongOrder(parts: VoicePart[], order: MemberKey[]): VoicePar
   return parts.map((p) => ({ ...p, voices: sortVoices(p.voices, order) }));
 }
 
+/** 行内の括弧書き "(...)" / "（...）" の範囲（括弧そのものを含む）。コーラスは括弧書きで表される */
+export function parenRanges(text: string): { start: number; end: number }[] {
+  return [...text.matchAll(/\([^)]*\)|（[^）]*）/g)].map((m) => ({
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+  }));
+}
+
+/**
+ * 括弧書きの部分だけを分けて、その歌い手を差し替える。括弧の外は元のまま。
+ * 括弧が無い行はそのまま返す。隣り合って同じ構成になった部分はまとめる。
+ */
+export function applyParenVoices(parts: VoicePart[], text: string, parenVoices: Voice[]): VoicePart[] {
+  const ranges = parenRanges(text);
+  if (ranges.length === 0) return parts;
+  const length = text.length;
+  const cuts = new Set<number>(parts.map((p) => Math.min(p.end, length)));
+  for (const r of ranges) {
+    cuts.add(r.start);
+    cuts.add(r.end);
+  }
+  cuts.add(length);
+  const ends = [...cuts].filter((c) => c > 0 && c <= length).sort((a, b) => a - b);
+
+  const result: VoicePart[] = [];
+  let start = 0;
+  for (const end of ends) {
+    const inParen = ranges.some((r) => start >= r.start && end <= r.end);
+    const source = parts.find((p) => p.end > start) ?? parts[parts.length - 1];
+    const voices = (inParen ? parenVoices : source.voices).map((v) => ({ ...v }));
+    const last = result[result.length - 1];
+    if (last && last.voices.map(voiceToken).join() === voices.map(voiceToken).join()) last.end = end;
+    else result.push({ end, voices });
+    start = end;
+  }
+  return result;
+}
+
 function resolveLinePartsRaw(
   vocalParts: unknown,
   vocalOverrides: unknown,

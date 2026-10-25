@@ -11,6 +11,7 @@ import {
   underlineTotal,
   applySongOrder,
   sortVoices,
+  applyParenVoices,
   roleLabel,
   DEFAULT_ORDER,
   type MemberKey,
@@ -35,6 +36,21 @@ const bulkDefaults = (): Record<MemberKey, BulkSetting> => ({
   paul: { mode: "keep", role: "L", double: false, add: false },
   george: { mode: "keep", role: "L", double: false, add: false },
   ringo: { mode: "keep", role: "L", double: false, add: false },
+});
+// かっこ書き（コーラス）の一括設定。on の人だけがかっこの中を歌う
+type ParenSetting = { on: boolean; role: Voice["role"]; double: boolean };
+const parenDefaults = (): Record<MemberKey, ParenSetting> => ({
+  john: { on: false, role: "L", double: false },
+  paul: { on: false, role: "L", double: false },
+  george: { on: false, role: "L", double: false },
+  ringo: { on: false, role: "L", double: false },
+});
+// 例：Boys 型。トップはポールのハモリ、ミドル・ボトムはジョンとジョージのユニゾン
+const parenBoysPreset = (): Record<MemberKey, ParenSetting> => ({
+  ...parenDefaults(),
+  paul: { on: true, role: "L", double: false },
+  george: { on: true, role: "H", double: false },
+  john: { on: true, role: "H", double: false },
 });
 import { KNOWN_TITLE_CLICK_EVENT, type KnownTitleClickDetail } from "./TrackTitle";
 
@@ -241,6 +257,10 @@ export default function LyricsList({
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  // かっこ書き（コーラス）の一括設定。onの人が、かっこの中の歌い手になる（上から順は parenOrder）
+  const [paren, setParen] = useState(parenDefaults);
+  const [parenOrder, setParenOrder] = useState<MemberKey[]>(DEFAULT_ORDER);
+  const [parenConfirm, setParenConfirm] = useState(false);
 
   // 確認した資料。保存済み（sources）は緑で一覧表示し、入力欄（sourcesDraft）は新規分だけ。保存すると追記される
   const [sources, setSources] = useState<VocalSource[]>(initialSources);
@@ -360,11 +380,44 @@ export default function LyricsList({
     return plan;
   }
 
-  async function runBulk() {
-    const plan = planBulk();
+  // かっこ書き（コーラス）の部分だけを、指定した歌い手に差し替える計画
+  function planParen() {
+    const voices = parenOrder
+      .filter((m) => paren[m].on)
+      .map((m): Voice => ({ member: m, role: paren[m].role, double: paren[m].double }));
+    const plan: { line: Line; next: VoicePart[] }[] = [];
+    for (const line of lines) {
+      const current = partsFor(line);
+      const next = applyParenVoices(current, line.original, voices);
+      if (JSON.stringify(serializeParts(next)) !== JSON.stringify(serializeParts(current))) {
+        plan.push({ line, next });
+      }
+    }
+    return plan;
+  }
+  const updateParen = (m: MemberKey, patch: Partial<ParenSetting>) => {
+    setParen((prev) => ({ ...prev, [m]: { ...prev[m], ...patch } }));
+    setBulkConfirm(false);
+    setBulkMessage(null);
+  };
+  const moveParenOrder = (i: number, d: number) => {
+    setParenOrder((prev) => {
+      const next = [...prev];
+      const t = i + d;
+      if (t < 0 || t >= next.length) return prev;
+      [next[i], next[t]] = [next[t], next[i]];
+      return next;
+    });
+    setParenConfirm(false);
+    setBulkMessage(null);
+  };
+
+  async function runBulk(kind: "all" | "paren" = "all") {
+    const plan = kind === "paren" ? planParen() : planBulk();
     if (plan.length === 0) {
       setBulkMessage("書き換える行はありませんでした");
       setBulkConfirm(false);
+      setParenConfirm(false);
       return;
     }
     setBulkSaving(true);
@@ -387,10 +440,13 @@ export default function LyricsList({
         ...Object.fromEntries(plan.map(({ line, next }) => [line.lineIndex, next])),
       }));
       setSongOrder(null);
-      setBulk(bulkDefaults());
-      setBulkOrder(DEFAULT_ORDER);
-      setBulkOrderTouched(false);
+      if (kind === "all") {
+        setBulk(bulkDefaults());
+        setBulkOrder(DEFAULT_ORDER);
+        setBulkOrderTouched(false);
+      }
       setBulkConfirm(false);
+      setParenConfirm(false);
       setBulkMessage(`${plan.length}行を書き換えました`);
     } catch (err) {
       setVocalError(err instanceof Error ? err.message : "保存に失敗しました");
@@ -951,7 +1007,7 @@ export default function LyricsList({
                 <>
                   <span className="text-zinc-600">{planBulk().length}行を書き換えます。よろしいですか？</span>
                   <button
-                    onClick={runBulk}
+                    onClick={() => runBulk()}
                     disabled={bulkSaving}
                     className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                   >
@@ -984,6 +1040,92 @@ export default function LyricsList({
                 </button>
               )}
               {bulkMessage && <span className="text-emerald-700">{bulkMessage}</span>}
+            </div>
+            <div className="mt-2 flex flex-col gap-2 border-t border-zinc-200 pt-3">
+              <p className="font-medium text-zinc-600">かっこ書き（コーラス）をまとめて設定</p>
+              <p className="text-zinc-400">
+                「(...)」の中だけを、チェックした人の線に差し替えます（かっこの外は変わりません）。上から順は▲▼で指定します。
+              </p>
+              {parenOrder.map((m, i) => {
+                const b = paren[m];
+                return (
+                  <div key={m} className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-block h-[3px] w-5 rounded-full"
+                      style={{ backgroundColor: b.on && b.role === "H" ? MEMBERS[m].color + "99" : MEMBERS[m].color }}
+                    />
+                    <label className="flex w-20 items-center gap-1 font-medium">
+                      <input type="checkbox" checked={b.on} onChange={(e) => updateParen(m, { on: e.target.checked })} />
+                      {MEMBERS[m].name}
+                    </label>
+                    {b.on && (
+                      <>
+                        <button
+                          onClick={() => updateParen(m, { role: b.role === "L" ? "H" : "L" })}
+                          className="rounded-full border border-zinc-300 px-2 py-0.5 hover:bg-white"
+                        >
+                          {b.role === "L" ? "濃い線（ハモリ）" : "ユニゾン（薄い線）"}
+                        </button>
+                        <button
+                          onClick={() => updateParen(m, { double: !b.double })}
+                          className={`rounded-full border px-2 py-0.5 ${
+                            b.double ? "border-zinc-800 bg-zinc-800 text-white" : "border-zinc-300 hover:bg-white"
+                          }`}
+                        >
+                          ダブル
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => moveParenOrder(i, -1)} className="px-1 text-zinc-500">
+                      ▲
+                    </button>
+                    <button onClick={() => moveParenOrder(i, 1)} className="px-1 text-zinc-500">
+                      ▼
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setParen(parenBoysPreset());
+                    setParenOrder(DEFAULT_ORDER);
+                    setParenConfirm(false);
+                  }}
+                  className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white"
+                >
+                  Boys型にする（ポール＝ハモリ／ジョン・ジョージ＝ユニゾン）
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {parenConfirm ? (
+                  <>
+                    <span className="text-zinc-600">かっこ書きのある{planParen().length}行を書き換えます。よろしいですか？</span>
+                    <button
+                      onClick={() => runBulk("paren")}
+                      disabled={bulkSaving}
+                      className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      {bulkSaving ? "適用中..." : "実行"}
+                    </button>
+                    <button
+                      onClick={() => setParenConfirm(false)}
+                      disabled={bulkSaving}
+                      className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white disabled:opacity-50"
+                    >
+                      やめる
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setParenConfirm(true)}
+                    disabled={!parenOrder.some((m) => paren[m].on)}
+                    className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                  >
+                    かっこの中に適用
+                  </button>
+                )}
+              </div>
             </div>
             {vocalError && editingVocalIndex === null && <p className="text-red-500">{vocalError}</p>}
           </div>
