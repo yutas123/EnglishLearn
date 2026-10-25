@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MEMBERS, type MemberKey, type Voice, type VoicePart } from "@/lib/beatles";
+import { MEMBERS, roleLabel, type MemberKey, type Voice, type VoicePart } from "@/lib/beatles";
 
 export type VocalScope = "line" | "section";
 
@@ -201,7 +201,7 @@ export default function VocalEditor({
               onClick={() => update(i, { role: v.role === "L" ? "H" : "L" })}
               className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-50"
             >
-              {v.role === "L" ? "リード" : "ハモリ"}
+              {roleLabel(v, voices.length)}
             </button>
             <button
               onClick={() => update(i, { double: !v.double })}

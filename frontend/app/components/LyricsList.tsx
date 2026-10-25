@@ -10,6 +10,7 @@ import {
   voiceUnderlineStyle,
   underlineTotal,
   applySongOrder,
+  roleLabel,
   DEFAULT_ORDER,
   type MemberKey,
   type VoicePart,
@@ -892,7 +893,7 @@ export default function LyricsList({
                           ? part.voices
                               .map(
                                 (v) =>
-                                  `${MEMBERS[v.member].name}（${v.role === "L" ? "リード" : "ハモリ"}${v.double ? "・ダブルトラック" : ""}）`
+                                  `${MEMBERS[v.member].name}（${roleLabel(v, part.voices.length)}${v.double ? "・ダブルトラック" : ""}）`
                               )
                               .join(" / ")
                           : undefined

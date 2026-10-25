@@ -159,7 +159,7 @@ export default async function TrackPage({
                   {m.name}
                 </span>
               ))}
-              <span className="text-zinc-400">濃い線=リード / 薄い線=ハモリ / 二重線=ダブルトラック</span>
+              <span className="text-zinc-400">濃い線=リード・ハモリ / 薄い線=ユニゾン / 二重線=ダブルトラック</span>
             </p>
           )}
         </section>

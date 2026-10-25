@@ -10,7 +10,7 @@ export const MEMBERS = {
 
 export type MemberKey = keyof typeof MEMBERS;
 
-// 'john:L' / 'paul:H' / 'john:L:2'（末尾の2=ダブルトラック）。L=リード、H=ハモリ（リードと同じ歌詞を重ねる声）。コーラス/掛け合いは線を引かないのでデータに含めない
+// 'john:L' / 'paul:H' / 'john:L:2'（末尾の2=ダブルトラック）。L=濃い線（1本ならリード、2本以上ならハモリ）、H=薄い線（ユニゾン）。コーラス/掛け合いは線を引かないのでデータに含めない
 // double=true はダブルトラック（同じ人の声を重ね録りしている）。同色の二重線で描く
 export type Voice = { member: MemberKey; role: "L" | "H"; double: boolean };
 
@@ -35,7 +35,7 @@ export function resolveVoices(vocalParts: unknown, sectionLabel: string | null):
       return tokens
         .map((t) => (typeof t === "string" ? parseVoice(t) : null))
         .filter((v): v is Voice => v !== null)
-        // 薄い線（ハモリ）は画面で手動指定したものだけ。セクション指定の初期値は常に濃い線にする
+        // 薄い線（ユニゾン）は画面で手動指定したものだけ。セクション指定の初期値は常に濃い線にする
         .map((v) => ({ ...v, role: "L" as const }));
     }
   }
@@ -166,7 +166,7 @@ function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
   // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
   const bars: Omit<Bar, "offset">[] = [];
   voices.forEach((v) => {
-    // ハモリはリードより少し薄く
+    // ユニゾンは薄く
     const color = v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99";
     const heights = v.double ? [2, 2] : [3];
     heights.forEach((height) => {
@@ -179,7 +179,8 @@ function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
   let offset = 0;
   for (let i = bars.length - 1; i >= 0; i--) {
     withOffset.unshift({ ...bars[i], offset });
-    const sameVoiceAbove = i > 0 && isSameVoice(voices, i, i - 1);
+    // 同じ人の二重線は1px、それ以外は2px
+    const sameVoiceAbove = i > 0 && ownerOf(voices, i - 1) === ownerOf(voices, i);
     offset += bars[i].height + (sameVoiceAbove ? 1 : 2);
   }
   return { bars: withOffset, total: offset - 2 + 3 }; // 最上段の隙間は不要、文字との間に3px
@@ -229,11 +230,17 @@ export function voiceUnderlineStyle(
 }
 
 // bars配列のi番目とj番目が同じ人の（ダブルトラックの）2本かどうか
-function isSameVoice(voices: Voice[], i: number, j: number): boolean {
+/** i 本目の線が、voices の何番目の声のものか（ダブルトラックは1人で2本の線になる） */
+function ownerOf(voices: Voice[], i: number): number {
   let index = 0;
-  const owner: number[] = [];
-  voices.forEach((v, vi) => {
-    for (let k = 0; k < (v.double ? 2 : 1); k++) owner[index++] = vi;
-  });
-  return owner[i] === owner[j];
+  for (let vi = 0; vi < voices.length; vi++) {
+    index += voices[vi].double ? 2 : 1;
+    if (i < index) return vi;
+  }
+  return voices.length - 1;
+}
+
+/** 声の呼び名。濃い線は、1本だけならリード、2本以上ならハモリ。薄い線はユニゾン */
+export function roleLabel(v: Voice, voiceCount: number): string {
+  return v.role === "H" ? "ユニゾン" : voiceCount > 1 ? "ハモリ" : "リード";
 }
