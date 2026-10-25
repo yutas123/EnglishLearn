@@ -34,7 +34,9 @@ export function resolveVoices(vocalParts: unknown, sectionLabel: string | null):
     if (Array.isArray(tokens)) {
       return tokens
         .map((t) => (typeof t === "string" ? parseVoice(t) : null))
-        .filter((v): v is Voice => v !== null);
+        .filter((v): v is Voice => v !== null)
+        // 薄い線（ハモリ）は画面で手動指定したものだけ。セクション指定の初期値は常に濃い線にする
+        .map((v) => ({ ...v, role: "L" as const }));
     }
   }
   return [];
@@ -87,6 +89,23 @@ export function resolveSongOrder(vocalOverrides: unknown): MemberKey[] | null {
   if (!Array.isArray(raw)) return null;
   const order = raw.filter((m): m is MemberKey => typeof m === "string" && m in MEMBERS);
   return order.length > 0 ? order : null;
+}
+
+/** 曲全体で「確認した資料」（URLとひとことメモ）の一覧は、vocalOverrides の "_sources" に保存する */
+export const SOURCES_KEY = "_sources";
+
+export type VocalSource = { url: string; note: string };
+
+export function resolveSources(vocalOverrides: unknown): VocalSource[] {
+  if (!vocalOverrides || typeof vocalOverrides !== "object") return [];
+  const raw = (vocalOverrides as Record<string, unknown>)[SOURCES_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r) => {
+    const { url, note } = (r ?? {}) as { url?: unknown; note?: unknown };
+    return typeof url === "string" && /^https?:\/\//.test(url)
+      ? [{ url, note: typeof note === "string" ? note : "" }]
+      : [];
+  });
 }
 
 function isLineOverridden(vocalOverrides: unknown, lineIndex: number): boolean {
@@ -147,7 +166,8 @@ function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
   // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
   const bars: Omit<Bar, "offset">[] = [];
   voices.forEach((v) => {
-    const color = MEMBERS[v.member].color;
+    // ハモリはリードより少し薄く
+    const color = v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99";
     const heights = v.double ? [2, 2] : [3];
     heights.forEach((height) => {
       bars.push({ height, color });

@@ -27,7 +27,7 @@ function isValidChange(value: unknown): value is Change {
 
 /**
  * 歌詞の下線（誰が歌っているか）の行単位の上書きを保存する。
- * body: { changes: { "<lineIndex>": ["john:L:2", ...] | { parts: [{ end, v: [...] }] } | null } }
+ * body: { addSources?: [{ url, note }]（確認済み資料の追記。既存は消さない）, removeSource?: url（その資料を1件削除）, changes: { "<lineIndex>": ["john:L:2", ...] | { parts: [{ end, v: [...] }] } | null } }
  * 配列は「その行全体の線の構成（空配列=線なし）」、parts は「行内を文字位置で区切った部分ごとの構成」
  * （end は部分の終わりの文字位置）、nullは「上書きを消して初期値に戻す」。
  */
@@ -43,6 +43,28 @@ export async function POST(
 
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
     return NextResponse.json({ error: "changes が不正です" }, { status: 400 });
+  }
+  // 確認した資料の追記（既存の一覧は消さない）と、URL指定での1件削除
+  const sources: unknown = body?.addSources;
+  const removeSource: unknown = body?.removeSource;
+  if (
+    sources !== undefined &&
+    !(
+      Array.isArray(sources) &&
+      sources.length <= 30 &&
+      sources.every(
+        (r) =>
+          typeof r?.url === "string" &&
+          r.url.length <= 500 &&
+          /^https?:\/\/\S+$/.test(r.url) &&
+          (r.note === undefined || (typeof r.note === "string" && r.note.length <= 200))
+      )
+    )
+  ) {
+    return NextResponse.json({ error: "資料のURLが不正です（http(s)://で始めてください）" }, { status: 400 });
+  }
+  if (removeSource !== undefined && typeof removeSource !== "string") {
+    return NextResponse.json({ error: "削除する資料が不正です" }, { status: 400 });
   }
   if (
     order !== undefined &&
@@ -79,6 +101,21 @@ export async function POST(
   };
   if (order === null) delete merged._order;
   else if (order !== undefined) merged._order = order;
+  let sourceList = ((merged._sources as { url: string; note: string }[] | undefined) ?? []).slice();
+  if (typeof removeSource === "string") sourceList = sourceList.filter((r) => r.url !== removeSource);
+  if (sources !== undefined) {
+    for (const r of sources as { url: string; note?: string }[]) {
+      // 同じURLはメモだけ更新し、重複させない
+      const existing = sourceList.find((x) => x.url === r.url);
+      if (existing) existing.note = r.note ?? existing.note;
+      else sourceList.push({ url: r.url, note: r.note ?? "" });
+    }
+  }
+  if (sourceList.length > 30) {
+    return NextResponse.json({ error: "資料は30件までです" }, { status: 400 });
+  }
+  if (sourceList.length > 0) merged._sources = sourceList;
+  else delete merged._sources;
   for (const [key, value] of Object.entries(changes as Record<string, Change>)) {
     if (value === null) delete merged[key];
     else merged[key] = value;
@@ -94,5 +131,5 @@ export async function POST(
   // 曲ページは静的生成されているため、保存内容が次の表示にも反映されるよう再生成する
   revalidatePath(`/tracks/${trackId}`);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, sources: sourceList });
 }

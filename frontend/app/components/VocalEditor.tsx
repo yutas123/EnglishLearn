@@ -175,7 +175,7 @@ export default function VocalEditor({
                     <span
                       key={v.member}
                       className="inline-block h-[3px] w-4 rounded-full"
-                      style={{ backgroundColor: MEMBERS[v.member].color }}
+                      style={{ backgroundColor: v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99" }}
                     />
                   ))}
                 </span>
@@ -194,7 +194,7 @@ export default function VocalEditor({
           <div key={v.member} className="flex flex-wrap items-center gap-2">
             <span
               className="inline-block h-[3px] w-5 rounded-full"
-              style={{ backgroundColor: MEMBERS[v.member].color }}
+              style={{ backgroundColor: v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99" }}
             />
             <span className="w-14 text-xs font-medium">{MEMBERS[v.member].name}</span>
             <button

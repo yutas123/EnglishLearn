@@ -13,6 +13,7 @@ import {
   DEFAULT_ORDER,
   type MemberKey,
   type VoicePart,
+  type VocalSource,
 } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
 import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
@@ -167,6 +168,7 @@ export default function LyricsList({
   artistName,
   canEditVocals = false,
   initialSongOrder = null,
+  initialSources = [],
 }: {
   trackId: string;
   lines: Line[];
@@ -175,6 +177,8 @@ export default function LyricsList({
   canEditVocals?: boolean;
   // 曲全体の線の並び順（上から）。設定されていれば、全ての行でこの順に線を並べる
   initialSongOrder?: MemberKey[] | null;
+  // 曲全体で「この資料を確認した」と記録した資料の一覧
+  initialSources?: VocalSource[];
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -211,6 +215,44 @@ export default function LyricsList({
   const [songOrder, setSongOrder] = useState<MemberKey[] | null>(initialSongOrder);
   const [orderDraft, setOrderDraft] = useState<MemberKey[]>(initialSongOrder ?? DEFAULT_ORDER);
   const [orderSaving, setOrderSaving] = useState(false);
+
+  // 確認した資料。保存済み（sources）は緑で一覧表示し、入力欄（sourcesDraft）は新規分だけ。保存すると追記される
+  const [sources, setSources] = useState<VocalSource[]>(initialSources);
+  const [sourcesDraft, setSourcesDraft] = useState<VocalSource[]>([]);
+  const [sourcesEditing, setSourcesEditing] = useState(false);
+  const [sourcesSaving, setSourcesSaving] = useState(false);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
+
+  async function postSources(body: { addSources?: VocalSource[]; removeSource?: string }): Promise<boolean> {
+    setSourcesSaving(true);
+    setSourcesError(null);
+    try {
+      const res = await fetch(`/api/tracks/${trackId}/vocals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "保存に失敗しました");
+      setSources(data.sources ?? []);
+      return true;
+    } catch (err) {
+      setSourcesError(err instanceof Error ? err.message : "保存に失敗しました");
+      return false;
+    } finally {
+      setSourcesSaving(false);
+    }
+  }
+  async function saveSources() {
+    const added = sourcesDraft
+      .map((r) => ({ url: r.url.trim(), note: r.note.trim() }))
+      .filter((r) => r.url !== "");
+    if (added.length > 0 && !(await postSources({ addSources: added }))) return;
+    setSourcesDraft([]);
+    setSourcesEditing(false);
+  }
+  const updateSourceDraft = (i: number, patch: Partial<VocalSource>) =>
+    setSourcesDraft((prev) => prev.map((r, k) => (k === i ? { ...r, ...patch } : r)));
 
   const partsFor = (line: Line): VoicePart[] => {
     const parts = (line.lineIndex in localVoices
@@ -639,8 +681,97 @@ export default function LyricsList({
           data-vocal-editor
           className="mb-3 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs"
         >
+          <p className="font-medium">確認した資料</p>
+          {sources.length > 0 && (
+            <div className="flex flex-col gap-0.5 text-emerald-700">
+              {sources.map((r, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 break-all">
+                    ✓{" "}
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
+                      {r.url}
+                    </a>
+                    {r.note && <span className="ml-2 text-zinc-900">{r.note}</span>}
+                  </p>
+                  {sourcesEditing && (
+                    <button
+                      onClick={() => postSources({ removeSource: r.url })}
+                      disabled={sourcesSaving}
+                      className="shrink-0 px-1 text-red-500 disabled:opacity-50"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {sourcesEditing &&
+            sourcesDraft.map((r, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  type="url"
+                  value={r.url}
+                  onChange={(e) => updateSourceDraft(i, { url: e.target.value })}
+                  placeholder="https://..."
+                  className="min-w-0 flex-[2] rounded-lg border border-zinc-300 px-2 py-1.5"
+                />
+                <input
+                  type="text"
+                  value={r.note}
+                  onChange={(e) => updateSourceDraft(i, { note: e.target.value })}
+                  placeholder="メモ（任意）"
+                  maxLength={200}
+                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1.5"
+                />
+                <button
+                  onClick={() => setSourcesDraft((prev) => prev.filter((_, k) => k !== i))}
+                  className="px-1 text-red-500"
+                >
+                  削除
+                </button>
+              </div>
+            ))}
+          <div className="flex items-center gap-2">
+            {sourcesEditing ? (
+              <>
+                <button
+                  onClick={() => setSourcesDraft((prev) => [...prev, { url: "", note: "" }])}
+                  className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white"
+                >
+                  資料を追加
+                </button>
+                <button
+                  onClick={saveSources}
+                  disabled={sourcesSaving}
+                  className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {sourcesSaving ? "保存中..." : "保存"}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setSourcesEditing(true)}
+                className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white"
+              >
+                資料を編集
+              </button>
+            )}
+          </div>
+          {sourcesError && <p className="text-red-500">{sourcesError}</p>}
+        </div>
+      )}
+      {vocalEditMode && (
+        <details
+          data-vocal-editor
+          className="mb-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs"
+        >
+          <summary className="cursor-pointer select-none text-zinc-500">
+            曲全体の線の並び{songOrder ? "（設定中）" : ""}
+          </summary>
+          <div className="mt-2 flex flex-col gap-2">
           <p className="font-medium">
-            この曲の線の並び（上→下）{songOrder ? "：設定中（全ての行に適用）" : "：行ごとの指定に従う"}
+            線の並び（上→下）{songOrder ? "：設定中（全ての行に適用）" : "：行ごとの指定に従う"}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {orderDraft.map((m, i) => (
@@ -682,7 +813,8 @@ export default function LyricsList({
             )}
           </div>
           {vocalError && editingVocalIndex === null && <p className="text-red-500">{vocalError}</p>}
-        </div>
+          </div>
+        </details>
       )}
       {lines.map((line, index) => {
         const prevLabel = index > 0 ? lines[index - 1].sectionLabel : null;

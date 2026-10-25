@@ -6,6 +6,7 @@ import {
   DEFAULT_ORDER,
   applySongOrder,
   resolveLineParts,
+  resolveSources,
   resolveSongOrder,
   resolveVoices,
 } from "@/lib/beatles";
@@ -158,7 +159,7 @@ export default async function TrackPage({
                   {m.name}
                 </span>
               ))}
-              <span className="text-zinc-400">二重線=ダブルトラック</span>
+              <span className="text-zinc-400">濃い線=リード / 薄い線=ハモリ / 二重線=ダブルトラック</span>
             </p>
           )}
         </section>
@@ -185,6 +186,7 @@ export default async function TrackPage({
           artistName={track.album.artistName}
           canEditVocals={track.album.artistName.includes("Beatles")}
           initialSongOrder={songOrder}
+          initialSources={resolveSources(track.vocalOverrides)}
         />
       )}
 
