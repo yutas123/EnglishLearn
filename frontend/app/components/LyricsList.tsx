@@ -10,14 +10,32 @@ import {
   voiceUnderlineStyle,
   underlineTotal,
   applySongOrder,
+  sortVoices,
   roleLabel,
   DEFAULT_ORDER,
   type MemberKey,
   type VoicePart,
   type VocalSource,
+  type Voice,
 } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
 import { VOCAL_EDIT_EVENT } from "./VocalEditToggle";
+
+// 行の線の構成を保存形式にする（1パートなら行全体の配列、複数パートなら parts 形式）
+const serializeParts = (p: VoicePart[]) =>
+  p.length === 1
+    ? p[0].voices.map(voiceToken)
+    : { parts: p.map((x) => ({ end: x.end, v: x.voices.map(voiceToken) })) };
+
+// 曲全体への一括適用で、人ごとに何をするか（変更しない／濃い線・ユニゾン・ダブルを設定／全行から削除）
+type BulkMode = "keep" | "set" | "remove";
+type BulkSetting = { mode: BulkMode; role: Voice["role"]; double: boolean; add: boolean };
+const bulkDefaults = (): Record<MemberKey, BulkSetting> => ({
+  john: { mode: "keep", role: "L", double: false, add: false },
+  paul: { mode: "keep", role: "L", double: false, add: false },
+  george: { mode: "keep", role: "L", double: false, add: false },
+  ringo: { mode: "keep", role: "L", double: false, add: false },
+});
 import { KNOWN_TITLE_CLICK_EVENT, type KnownTitleClickDetail } from "./TrackTitle";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -214,8 +232,15 @@ export default function LyricsList({
   }, [canEditVocals]);
 
   const [songOrder, setSongOrder] = useState<MemberKey[] | null>(initialSongOrder);
-  const [orderDraft, setOrderDraft] = useState<MemberKey[]>(initialSongOrder ?? DEFAULT_ORDER);
   const [orderSaving, setOrderSaving] = useState(false);
+
+  // 曲全体への一括適用（押した時点で全行の保存データを書き換える）
+  const [bulk, setBulk] = useState(bulkDefaults);
+  const [bulkOrder, setBulkOrder] = useState<MemberKey[]>(DEFAULT_ORDER);
+  const [bulkOrderTouched, setBulkOrderTouched] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   // 確認した資料。保存済み（sources）は緑で一覧表示し、入力欄（sourcesDraft）は新規分だけ。保存すると追記される
   const [sources, setSources] = useState<VocalSource[]>(initialSources);
@@ -284,14 +309,95 @@ export default function LyricsList({
       setOrderSaving(false);
     }
   }
-  const moveOrder = (i: number, d: number) =>
-    setOrderDraft((prev) => {
+  const updateBulk = (m: MemberKey, patch: Partial<BulkSetting>) => {
+    setBulk((prev) => ({ ...prev, [m]: { ...prev[m], ...patch } }));
+    setBulkConfirm(false);
+    setBulkMessage(null);
+  };
+  const moveBulkOrder = (i: number, d: number) => {
+    setBulkOrder((prev) => {
       const next = [...prev];
       const t = i + d;
       if (t < 0 || t >= next.length) return prev;
       [next[i], next[t]] = [next[t], next[i]];
       return next;
     });
+    setBulkOrderTouched(true);
+    setBulkConfirm(false);
+    setBulkMessage(null);
+  };
+  const bulkHasWork = bulkOrderTouched || bulkOrder.some((m) => bulk[m].mode !== "keep");
+
+  // 1行ぶんの線の構成に、一括適用の指定を反映する
+  function applyBulkToParts(parts: VoicePart[]): VoicePart[] {
+    return parts.map((p) => {
+      let voices: Voice[] = p.voices
+        .filter((v) => bulk[v.member].mode !== "remove")
+        .map((v) =>
+          bulk[v.member].mode === "set" ? { ...v, role: bulk[v.member].role, double: bulk[v.member].double } : v
+        );
+      for (const m of bulkOrder) {
+        const b = bulk[m];
+        if (b.mode === "set" && b.add && !voices.some((v) => v.member === m)) {
+          voices = [...voices, { member: m, role: b.role, double: b.double }];
+        }
+      }
+      if (bulkOrderTouched) voices = sortVoices(voices, bulkOrder);
+      return { ...p, voices };
+    });
+  }
+
+  // 変わる行だけを保存データにして返す
+  function planBulk() {
+    const plan: { line: Line; next: VoicePart[] }[] = [];
+    for (const line of lines) {
+      const current = partsFor(line);
+      const next = applyBulkToParts(current);
+      if (JSON.stringify(serializeParts(next)) !== JSON.stringify(serializeParts(current))) {
+        plan.push({ line, next });
+      }
+    }
+    return plan;
+  }
+
+  async function runBulk() {
+    const plan = planBulk();
+    if (plan.length === 0) {
+      setBulkMessage("書き換える行はありませんでした");
+      setBulkConfirm(false);
+      return;
+    }
+    setBulkSaving(true);
+    setVocalError(null);
+    try {
+      const res = await fetch(`/api/tracks/${trackId}/vocals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          changes: Object.fromEntries(plan.map(({ line, next }) => [String(line.lineIndex), serializeParts(next)])),
+          // 旧「曲全体の並び固定」が残っていれば、結果を各行に反映したうえで解除する
+          ...(songOrder ? { order: null } : {}),
+        }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => null))?.error ?? "保存に失敗しました");
+      }
+      setLocalVoices((prev) => ({
+        ...prev,
+        ...Object.fromEntries(plan.map(({ line, next }) => [line.lineIndex, next])),
+      }));
+      setSongOrder(null);
+      setBulk(bulkDefaults());
+      setBulkOrder(DEFAULT_ORDER);
+      setBulkOrderTouched(false);
+      setBulkConfirm(false);
+      setBulkMessage(`${plan.length}行を書き換えました`);
+    } catch (err) {
+      setVocalError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
 
   // 編集対象の行と同じ見出しで連続している行（「セクション全体」の範囲）
   function sectionRange(index: number): Line[] {
@@ -768,52 +874,118 @@ export default function LyricsList({
           className="mb-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs"
         >
           <summary className="cursor-pointer select-none text-zinc-500">
-            曲全体の線の並び{songOrder ? "（設定中）" : ""}
+            曲全体に一括適用{songOrder ? "（旧・並び固定中）" : ""}
           </summary>
           <div className="mt-2 flex flex-col gap-2">
-          <p className="font-medium">
-            線の並び（上→下）{songOrder ? "：設定中（全ての行に適用）" : "：行ごとの指定に従う"}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {orderDraft.map((m, i) => (
-              <span
-                key={m}
-                className="flex items-center gap-1 rounded-full border bg-white px-2 py-1"
-                style={{ borderColor: MEMBERS[m].color }}
-              >
-                <button onClick={() => moveOrder(i, -1)} className="px-0.5 text-zinc-500">
-                  ◀
+            <p className="text-zinc-400">
+              変えたい人だけ「設定」か「削除」を選び、「全行に適用」で全ての行を書き換えます（適用後は行ごとに直せます）。
+              上から順の並びは▲▼で指定します。
+            </p>
+            {bulkOrder.map((m, i) => {
+              const b = bulk[m];
+              return (
+                <div key={m} className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="inline-block h-[3px] w-5 rounded-full"
+                    style={{ backgroundColor: b.role === "H" && b.mode === "set" ? MEMBERS[m].color + "99" : MEMBERS[m].color }}
+                  />
+                  <span className="w-14 font-medium">{MEMBERS[m].name}</span>
+                  {(
+                    [
+                      ["keep", "変更しない"],
+                      ["set", "設定"],
+                      ["remove", "削除"],
+                    ] as [BulkMode, string][]
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => updateBulk(m, { mode })}
+                      className={`rounded-full border px-2 py-0.5 ${
+                        b.mode === mode
+                          ? mode === "remove"
+                            ? "border-red-500 bg-red-500 text-white"
+                            : "border-zinc-800 bg-zinc-800 text-white"
+                          : "border-zinc-300 hover:bg-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {b.mode === "set" && (
+                    <>
+                      <button
+                        onClick={() => updateBulk(m, { role: b.role === "L" ? "H" : "L" })}
+                        className="rounded-full border border-zinc-300 px-2 py-0.5 hover:bg-white"
+                      >
+                        {b.role === "L" ? "濃い線" : "ユニゾン（薄い線）"}
+                      </button>
+                      <button
+                        onClick={() => updateBulk(m, { double: !b.double })}
+                        className={`rounded-full border px-2 py-0.5 ${
+                          b.double ? "border-zinc-800 bg-zinc-800 text-white" : "border-zinc-300 hover:bg-white"
+                        }`}
+                      >
+                        ダブル
+                      </button>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={b.add}
+                          onChange={(e) => updateBulk(m, { add: e.target.checked })}
+                        />
+                        歌っていない行にも追加
+                      </label>
+                    </>
+                  )}
+                  <button onClick={() => moveBulkOrder(i, -1)} className="px-1 text-zinc-500">
+                    ▲
+                  </button>
+                  <button onClick={() => moveBulkOrder(i, 1)} className="px-1 text-zinc-500">
+                    ▼
+                  </button>
+                </div>
+              );
+            })}
+            <div className="flex flex-wrap items-center gap-2">
+              {bulkConfirm ? (
+                <>
+                  <span className="text-zinc-600">{planBulk().length}行を書き換えます。よろしいですか？</span>
+                  <button
+                    onClick={runBulk}
+                    disabled={bulkSaving}
+                    className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                  >
+                    {bulkSaving ? "適用中..." : "実行"}
+                  </button>
+                  <button
+                    onClick={() => setBulkConfirm(false)}
+                    disabled={bulkSaving}
+                    className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white disabled:opacity-50"
+                  >
+                    やめる
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setBulkConfirm(true)}
+                  disabled={!bulkHasWork}
+                  className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+                >
+                  全行に適用
                 </button>
-                <span
-                  className="inline-block h-[3px] w-4 rounded-full"
-                  style={{ backgroundColor: MEMBERS[m].color }}
-                />
-                <span className="font-medium">{MEMBERS[m].name}</span>
-                <button onClick={() => moveOrder(i, 1)} className="px-0.5 text-zinc-500">
-                  ▶
+              )}
+              {songOrder && (
+                <button
+                  onClick={() => saveSongOrder(null)}
+                  disabled={orderSaving}
+                  className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white disabled:opacity-50"
+                >
+                  並び固定を解除
                 </button>
-              </span>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => saveSongOrder(orderDraft)}
-              disabled={orderSaving}
-              className="rounded-full bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-            >
-              {orderSaving ? "保存中..." : "この並びを全体に適用"}
-            </button>
-            {songOrder && (
-              <button
-                onClick={() => saveSongOrder(null)}
-                disabled={orderSaving}
-                className="rounded-full border border-zinc-300 px-3 py-1 hover:bg-white disabled:opacity-50"
-              >
-                設定を解除
-              </button>
-            )}
-          </div>
-          {vocalError && editingVocalIndex === null && <p className="text-red-500">{vocalError}</p>}
+              )}
+              {bulkMessage && <span className="text-emerald-700">{bulkMessage}</span>}
+            </div>
+            {vocalError && editingVocalIndex === null && <p className="text-red-500">{vocalError}</p>}
           </div>
         </details>
       )}
