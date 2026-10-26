@@ -28,7 +28,7 @@ const serializeParts = (p: VoicePart[]) =>
     ? p[0].voices.map(voiceToken)
     : { parts: p.map((x) => ({ end: x.end, v: x.voices.map(voiceToken) })) };
 
-// 曲全体への一括適用で、人ごとに何をするか（変更しない／濃い線・ユニゾン・ダブルを設定／全行から削除）
+// 曲全体への一括適用で、人ごとに何をするか（変更しない／濃い線・ユニゾン・ADTを設定／全行から削除）
 type BulkMode = "keep" | "set" | "remove";
 type BulkSetting = { mode: BulkMode; role: Voice["role"]; double: boolean; add: boolean };
 const bulkDefaults = (): Record<MemberKey, BulkSetting> => ({
@@ -981,7 +981,7 @@ export default function LyricsList({
                           b.double ? "border-zinc-800 bg-zinc-800 text-white" : "border-zinc-300 hover:bg-white"
                         }`}
                       >
-                        ダブル
+                        ADT
                       </button>
                       <label className="flex items-center gap-1">
                         <input
@@ -1072,7 +1072,7 @@ export default function LyricsList({
                             b.double ? "border-zinc-800 bg-zinc-800 text-white" : "border-zinc-300 hover:bg-white"
                           }`}
                         >
-                          ダブル
+                          ADT
                         </button>
                       </>
                     )}
@@ -1207,7 +1207,7 @@ export default function LyricsList({
                           ? part.voices
                               .map(
                                 (v) =>
-                                  `${MEMBERS[v.member].name}（${roleLabel(v, part.voices.length)}${v.double ? "・ダブルトラック" : ""}）`
+                                  `${MEMBERS[v.member].name}（${roleLabel(v, part.voices.length)}${v.double ? "・ADT" : ""}）`
                               )
                               .join(" / ")
                           : undefined

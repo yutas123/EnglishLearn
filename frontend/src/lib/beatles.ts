@@ -10,8 +10,8 @@ export const MEMBERS = {
 
 export type MemberKey = keyof typeof MEMBERS;
 
-// 'john:L' / 'paul:H' / 'john:L:2'（末尾の2=ダブルトラック）。L=濃い線（1本ならリード、2本以上ならハモリ）、H=薄い線（ユニゾン）。コーラス/掛け合いは線を引かないのでデータに含めない
-// double=true はダブルトラック（同じ人の声を重ね録りしている）。同色の二重線で描く
+// 'john:L' / 'paul:H' / 'john:L:2'（末尾の2=ADT）。L=濃い線（1本ならリード、2本以上ならハモリ）、H=薄い線（ユニゾン）。コーラス/掛け合いは線を引かないのでデータに含めない
+// double=true はADT（同じ声を機械的に二重にしたもの）。同色の細い二重線で描く。同じ人が別に歌い重ねた声は、同じ人を複数の声として並べる（通常の太さの線が複数本）
 export type Voice = { member: MemberKey; role: "L" | "H"; double: boolean };
 
 function parseVoice(token: string): Voice | null {
@@ -201,7 +201,7 @@ function resolveLinePartsRaw(
 type Bar = { height: number; color: string; offset: number };
 
 function layoutBars(voices: Voice[]): { bars: Bar[]; total: number } {
-  // 上の線ほど音程が高い。ダブルトラックは同じ色の細い線を2本並べる
+  // 上の線ほど音程が高い。ADTは同じ色の細い線を2本並べる
   const bars: Omit<Bar, "offset">[] = [];
   voices.forEach((v) => {
     // ユニゾンは薄く
@@ -267,8 +267,8 @@ export function voiceUnderlineStyle(
   };
 }
 
-// bars配列のi番目とj番目が同じ人の（ダブルトラックの）2本かどうか
-/** i 本目の線が、voices の何番目の声のものか（ダブルトラックは1人で2本の線になる） */
+// bars配列のi番目とj番目が同じ人の（ADTの）2本かどうか
+/** i 本目の線が、voices の何番目の声のものか（ADTは1人で2本の線になる） */
 function ownerOf(voices: Voice[], i: number): number {
   let index = 0;
   for (let vi = 0; vi < voices.length; vi++) {

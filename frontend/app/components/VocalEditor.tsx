@@ -171,9 +171,9 @@ export default function VocalEditor({
                 <span className="min-w-0 flex-1 truncate">{lineText.slice(a, b).trim()}</span>
                 <span className="flex shrink-0 gap-1">
                   {p.voices.length === 0 && <span className="text-zinc-400">線なし</span>}
-                  {p.voices.map((v) => (
+                  {p.voices.map((v, vi) => (
                     <span
-                      key={v.member}
+                      key={`${v.member}-${vi}`}
                       className="inline-block h-[3px] w-4 rounded-full"
                       style={{ backgroundColor: v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99" }}
                     />
@@ -191,7 +191,7 @@ export default function VocalEditor({
         </p>
         {voices.length === 0 && <p className="text-xs text-zinc-500">線なし</p>}
         {voices.map((v, i) => (
-          <div key={v.member} className="flex flex-wrap items-center gap-2">
+          <div key={`${v.member}-${i}`} className="flex flex-wrap items-center gap-2">
             <span
               className="inline-block h-[3px] w-5 rounded-full"
               style={{ backgroundColor: v.role === "L" ? MEMBERS[v.member].color : MEMBERS[v.member].color + "99" }}
@@ -209,7 +209,16 @@ export default function VocalEditor({
                 v.double ? "border-zinc-800 bg-zinc-800 text-white" : "border-zinc-300 hover:bg-zinc-50"
               }`}
             >
-              ダブル
+              ADT
+            </button>
+            <button
+              onClick={() =>
+                setVoices((prev) => [...prev.slice(0, i + 1), { ...v, double: false }, ...prev.slice(i + 1)])
+              }
+              aria-label={`${MEMBERS[v.member].name}の声を重ねる`}
+              className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-50"
+            >
+              ＋1
             </button>
             {!orderLocked && (
               <>
