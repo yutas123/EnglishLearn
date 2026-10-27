@@ -810,5 +810,1693 @@
     },
     "sections": "unverified",
     "source": "https://en.wikipedia.org/wiki/Dizzy_Miss_Lizzy"
+  },
+  "Nowhere Man": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（Paul・Georgeと三声。ブリッジは単独の声に2人が付く形）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/nm.html"
+  },
+  "Think for Yourself": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。ヴァースは偶数行でPaul・Johnと三声、サビは1行目だけGeorge単独でその後Paulが対旋律）",
+    "parts": {
+      "Verse": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Chorus": [
+        "george:L:2",
+        "paul:H"
+      ],
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/tfy.html"
+  },
+  "The Word": {
+    "writer": "John Lennon 主体（Paulと共作。Lennon–McCartney名義）",
+    "lead": "John Lennon と Paul McCartney（ヴァースはデュエット、ブリッジはJohn単独）",
+    "parts": {
+      "Verse": [
+        "john:L:2",
+        "paul:L:2"
+      ],
+      "Bridge": [
+        "john:L"
+      ],
+      "*": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/tw.html"
+  },
+  "Michelle": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（単独トラック。JohnとGeorgeがほぼ全編で「ooh」などの合いの手）",
+    "parts": {
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/m4.html"
+  },
+  "What Goes On": {
+    "writer": "John Lennon 原案（Lennon–McCartney–Starkey名義）",
+    "lead": "Ringo Starr（単独トラック。John・Paulが右チャンネルでバック）",
+    "parts": {
+      "Chorus": [
+        "ringo:L",
+        "john:H",
+        "paul:H"
+      ],
+      "*": [
+        "ringo:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/wgo.html"
+  },
+  "Girl": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（単独トラック。サビはPaul・Georgeが重なり、ブリッジの括弧部分はバックの「tit, tit」）",
+    "parts": {
+      "Verse": [
+        "john:L"
+      ],
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "paren": {
+      "voices": [
+        "paul:H",
+        "george:H"
+      ],
+      "sections": [
+        "Bridge"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/g.html"
+  },
+  "I’m Looking Through You": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（アウトロ以外はダブルトラック。Johnはヴァース3フレーズ目で少しバック）",
+    "parts": {
+      "Outro": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/ilty.html"
+  },
+  "In My Life": {
+    "writer": "John Lennon（Lennon–McCartney名義。中間部のメロディはPaulも自分の作と主張）",
+    "lead": "John Lennon（ダブルトラック。奇数フレーズでPaulが対旋律）",
+    "parts": {
+      "*": [
+        "john:L:2",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/iml.html"
+  },
+  "Wait": {
+    "writer": "Lennon–McCartney名義（主にPaul）",
+    "lead": "John Lennon（ヴァースはPaulが3度上でハモリ）、ブリッジは Paul McCartney（ダブルトラック）",
+    "parts": {
+      "Bridge": [
+        "paul:L:2"
+      ],
+      "*": [
+        "john:L",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/w.html"
+  },
+  "If I Needed Someone": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。Paul・Johnが三声でハモる）",
+    "parts": {
+      "Bridge": [
+        "george:L:2"
+      ],
+      "*": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/iins.html"
+  },
+  "Run for Your Life": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァースは単独トラック、サビはダブルトラックでGeorge・Paulがハモリ）",
+    "parts": {
+      "Verse": [
+        "john:L"
+      ],
+      "Chorus": [
+        "john:L:2",
+        "george:H",
+        "paul:H"
+      ],
+      "Outro": [
+        "john:L"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/rfyl.html"
+  },
+  "Taxman": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック）。Paul・Johnがサビや最後のヴァースで「Taxman」を重ねる",
+    "parts": {
+      "Intro": [],
+      "Verse": [
+        "george:L:2"
+      ],
+      "Verse 3": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Verse 4": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Chorus": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Bridge": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Outro": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/t.html"
+  },
+  "Eleanor Rigby": {
+    "writer": "Paul McCartney（Johnも歌詞を補助。Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独、サビはダブルトラック。イントロ・ブリッジなどでJohn・Georgeが加わる）",
+    "parts": {
+      "Intro": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Verse": [
+        "paul:L"
+      ],
+      "Chorus": [
+        "paul:L:2"
+      ],
+      "Bridge": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/er.html"
+  },
+  "I’m Only Sleeping": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（再生速度を変えた声。ブリッジはPaulが対旋律）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/ios.html"
+  },
+  "Love You To": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（Paulのバックボーカルがあったとされるが最終ミックスでは消されている）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/lyt.html"
+  },
+  "Here, There and Everywhere": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（部分的にダブルトラック。John・Georgeが「ooh」のバック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/htae.html"
+  },
+  "Yellow Submarine": {
+    "writer": "Paul McCartney 主体（Johnが補助。Lennon–McCartney名義）",
+    "lead": "Ringo Starr（4番目のヴァースはJohnがエコー役）。サビは全員",
+    "parts": {
+      "Verse": [
+        "ringo:L"
+      ],
+      "Verse 4": [
+        "ringo:L",
+        "john:H"
+      ],
+      "Chorus": [
+        "ringo:L",
+        "paul:H",
+        "john:H",
+        "george:H"
+      ],
+      "Bridge": [
+        "paul:L",
+        "john:H"
+      ],
+      "*": [
+        "ringo:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/ys.html"
+  },
+  "She Said She Said": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（全編ダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/ssss.html"
+  },
+  "Good Day Sunshine": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独トラック、サビはJohn・Georgeがハモる）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/gds.html"
+  },
+  "And Your Bird Can Sing": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。バックは強調として部分的に付く）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/aybcs.html"
+  },
+  "For No One": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（単独トラック）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/fno.html"
+  },
+  "Doctor Robert": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック。2番目のヴァースからバックが付く）",
+    "parts": {
+      "Verse 1": [
+        "john:L:2"
+      ],
+      "Bridge": [
+        "john:L:2",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L:2",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/dr.html"
+  },
+  "I Want to Tell You": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。偶数フレーズにバック、アウトロはPaulの即興メリスマ）",
+    "parts": {
+      "Chorus": [
+        "george:L:2"
+      ],
+      "*": [
+        "george:L:2",
+        "john:H",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/iwtty.html"
+  },
+  "Got to Get You into My Life": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/gtgyiml.html"
+  },
+  "Tomorrow Never Knows": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（レスリー・スピーカーを通した加工ボーカル）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/tnk.html"
+  },
+  "Sgt. Pepper’s Lonely Hearts Club Band": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独トラック、サビ・ブリッジはJohn・Georgeがバック）",
+    "parts": {
+      "Intro": [
+        "paul:L"
+      ],
+      "Verse": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/splhcb.html"
+  },
+  "With a Little Help from My Friends": {
+    "writer": "Paul McCartney と John Lennon の共作（Lennon–McCartney名義）",
+    "lead": "Ringo Starr（ヴァースはソロ、問いかけをJohn・Paul・Georgeが掛け合い）",
+    "parts": {
+      "Verse 1": [
+        "ringo:L"
+      ],
+      "*": [
+        "ringo:L",
+        "john:H",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/walhfmf.html"
+  },
+  "Lucy in the Sky with Diamonds": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァース）、サビはPaul（ダブルトラック）にJohnが重なる",
+    "parts": {
+      "Verse": [
+        "john:L"
+      ],
+      "Pre-Chorus": [
+        "john:L:2"
+      ],
+      "Chorus": [
+        "paul:L:2",
+        "john:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/litswd.html"
+  },
+  "Getting Better": {
+    "writer": "Paul McCartney 主体（Johnも一部参加。Lennon–McCartney名義）",
+    "lead": "Paul McCartney（John・Georgeがバック）",
+    "parts": {
+      "Verse 2": [
+        "paul:L",
+        "paul:H"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/gb.html"
+  },
+  "Fixing a Hole": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック。2番目のブリッジ以降にバックの声が加わる）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/fah.html"
+  },
+  "She’s Leaving Home": {
+    "writer": "Paul McCartney（ヴァース）と John Lennon（親の台詞の部分）（Lennon–McCartney名義）",
+    "lead": "Paul McCartney。括弧内（親の台詞）は John Lennon",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "paren": {
+      "voices": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/slh.html"
+  },
+  "Being for the Benefit of Mr. Kite!": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（出典は歌い手を明記せず）",
+    "parts": {
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/bftbomk.html"
+  },
+  "Within You Without You": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（他のメンバーは演奏に不参加）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/wywy.html"
+  },
+  "When I’m Sixty-Four": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（再生速度を上げた単独トラック。John・Georgeがときどきバック）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/wisf.html"
+  },
+  "Lovely Rita": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースはソロ、サビやイントロ・アウトロでJohn・Georgeがバック）",
+    "parts": {
+      "Verse": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/lr.html"
+  },
+  "Good Morning Good Morning": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビなどでPaulが重なる）",
+    "parts": {
+      "Verse": [
+        "john:L"
+      ],
+      "Bridge": [
+        "john:L"
+      ],
+      "Verse 4": [
+        "john:L",
+        "paul:H"
+      ],
+      "*": [
+        "john:L",
+        "paul:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/gmgm.html"
+  },
+  "Sgt. Pepper’s Lonely Hearts Club Band (Reprise)": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（John・Georgeが加わる。アウトロはJohn）",
+    "parts": {
+      "Intro": [
+        "paul:L",
+        "john:H"
+      ],
+      "Verse": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Outro": [
+        "john:L",
+        "george:H"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/aditl.html"
+  },
+  "A Day in the Life": {
+    "writer": "John Lennon（ヴァース）と Paul McCartney（中間部）（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァース・サビ）、中間部は Paul McCartney",
+    "parts": {
+      "Interlude": [],
+      "Outro": [],
+      "Bridge": [
+        "paul:L"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/aditl.html"
+  },
+  "Magical Mystery Tour": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（John・Georgeと三声のブロックハーモニー。ブリッジはJohn）",
+    "parts": {
+      "Intro": [
+        "paul:L"
+      ],
+      "Bridge": [
+        "john:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/mmt.html"
+  },
+  "The Fool on the Hill": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独トラック、サビはダブルトラック）",
+    "parts": {
+      "Chorus": [
+        "paul:L:2"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/foth.html"
+  },
+  "Blue Jay Way": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（加工されたバックの声が掛け合いで入る）",
+    "parts": {
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/bjw.html"
+  },
+  "Your Mother Should Know": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（サビでJohn・Georgeがバック）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/ymsk.html"
+  },
+  "I Am the Walrus": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（加工されたボーカル。コーラスは外部歌手）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/iatw.html"
+  },
+  "Hello, Goodbye": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（サビやアウトロでJohn・Georgeがバック）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/hg.html"
+  },
+  "Strawberry Fields Forever": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（加工されたボーカル。サビはダブルトラック）",
+    "parts": {
+      "Chorus": [
+        "john:L:2"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/sff.html"
+  },
+  "Penny Lane": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（サビでJohn・Georgeがバック）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/pl.html"
+  },
+  "Baby, You’re a Rich Man": {
+    "writer": "John Lennon と Paul McCartney の共作（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァース）、サビは合唱（アウトロはPaulが目立つ）",
+    "parts": {
+      "Verse": [
+        "john:L"
+      ],
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/byarm.html"
+  },
+  "All You Need Is Love": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァース）、サビは全員の合唱",
+    "parts": {
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H",
+        "ringo:H"
+      ],
+      "Outro": [
+        "john:L",
+        "paul:H",
+        "george:H",
+        "ringo:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/aynil.html"
+  },
+  "Only a Northern Song": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（出典は歌い手を明記せず）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/oans.html"
+  },
+  "All Together Now": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ブリッジはPaulが抜けて他のメンバーが掛け合い）",
+    "parts": {
+      "Verse": [
+        "paul:L"
+      ],
+      "Bridge": [
+        "john:L",
+        "george:H",
+        "ringo:H"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H",
+        "ringo:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/atn.html"
+  },
+  "Hey Bulldog": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビは単独、ヴァースはPaulとの二声）",
+    "parts": {
+      "Verse": [
+        "john:L",
+        "paul:L"
+      ],
+      "Chorus": [
+        "john:L"
+      ],
+      "Bridge": [
+        "john:L",
+        "paul:L"
+      ],
+      "Outro": [
+        "john:L",
+        "paul:L"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/hb.html"
+  },
+  "It’s All Too Much": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。サビ・アウトロでPaul・Johnがバック）",
+    "parts": {
+      "Refrain": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "Outro": [
+        "george:L:2",
+        "paul:H",
+        "john:H"
+      ],
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/iatm.html"
+  },
+  "Back in the U.S.S.R.": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独トラック。ブリッジなどでバックが加わる）",
+    "parts": {
+      "Intro": [],
+      "Guitar Solo": [],
+      "Verse": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/bitu.html"
+  },
+  "Ob-La-Di, Ob-La-Da": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック。サビからバックの声）",
+    "parts": {
+      "Chorus": [
+        "paul:L:2",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/oo.html"
+  },
+  "Wild Honey Pie": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（多重録音のひとり多重唱）",
+    "parts": {
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/whp.html"
+  },
+  "The Continuing Story of Bungalow Bill": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビは全員とYoko、Maureen Starkeyら）",
+    "parts": {
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H",
+        "ringo:H"
+      ],
+      "Outro": [
+        "george:L"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/tcsobb.html"
+  },
+  "While My Guitar Gently Weeps": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ダブルトラック。Paulがヴァースで3度上のハモリ）",
+    "parts": {
+      "Verse": [
+        "george:L:2",
+        "paul:H"
+      ],
+      "Bridge": [
+        "george:L:2"
+      ],
+      "*": [
+        "george:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/wmggw.html"
+  },
+  "Happiness Is a Warm Gun": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（Paul・Georgeが重なる）",
+    "parts": {
+      "Verse 1": [
+        "john:L",
+        "paul:H"
+      ],
+      "Verse 2": [
+        "john:L"
+      ],
+      "Bridge": [
+        "john:L",
+        "paul:H"
+      ],
+      "Verse 3": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/hiawg.html"
+  },
+  "Martha My Dear": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ひとり多重録音）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/mmd.html"
+  },
+  "I’m So Tired": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/ist.html"
+  },
+  "Blackbird": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースは単独トラック、サビは重ね録り）",
+    "parts": {
+      "Chorus": [
+        "paul:L:2"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/b3.html"
+  },
+  "Piggies": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（出典は歌い手を明記せず。男声コーラスが最終ヴァースに登場）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/p.html"
+  },
+  "Rocky Raccoon": {
+    "writer": "Paul McCartney（John・Donovanも歌詞を補助。Lennon–McCartney名義）",
+    "lead": "Paul McCartney",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/rr.html"
+  },
+  "Don’t Pass Me By": {
+    "writer": "Ringo Starr",
+    "lead": "Ringo Starr（ダブルトラック、再生速度を上げた声）",
+    "parts": {
+      "*": [
+        "ringo:L:2"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/dpmb.html"
+  },
+  "Why Don’t We Do It in the Road?": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（大声で割れた単独トラック）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/wdwdiitr.html"
+  },
+  "I Will": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ひとりで主旋律とハモリ・口ベースを多重録音）",
+    "parts": {
+      "Verse 3": [
+        "paul:L:2"
+      ],
+      "Bridge": [
+        "paul:L",
+        "paul:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "paul:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/iw.html"
+  },
+  "Julia": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ほぼ単独トラック。各部の終わりだけダブルトラック）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/j.html"
+  },
+  "Birthday": {
+    "writer": "Paul McCartney 主体（John・Georgeも参加。Lennon–McCartney名義）",
+    "lead": "Paul McCartney（Yoko Ono、Pattie Harrisonが女声バック）",
+    "parts": {
+      "Verse": [
+        "paul:L"
+      ],
+      "Chorus": [
+        "paul:L",
+        "john:H"
+      ],
+      "Interlude": [
+        "paul:L",
+        "george:H"
+      ],
+      "Bridge": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/b.html"
+  },
+  "Yer Blues": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック風の加工）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/yb.html"
+  },
+  "Mother Nature’s Son": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（アウトロの最後のタイトル句はダブルトラック）",
+    "parts": {
+      "Instrumental Break": [],
+      "Outro": [
+        "paul:L:2"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/mns.html"
+  },
+  "Everybody’s Got Something to Hide Except Me and My Monkey": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（Paulが重なる掛け合い）",
+    "parts": {
+      "Verse 1": [
+        "john:L"
+      ],
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/egsthefmamm.html"
+  },
+  "Sexy Sadie": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（バックは出典に歌い手の記載なし）",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/ss.html"
+  },
+  "Helter Skelter": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（バックの声あり。最後の「blisters」はRingo）",
+    "parts": {
+      "Outro": [
+        "ringo:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/hs.html"
+  },
+  "Long, Long, Long": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ひとりで2〜3声を重ねている）",
+    "parts": {
+      "*": [
+        "george:L:2",
+        "george:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/lll.html"
+  },
+  "Revolution 1": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビの「shoo-be-doo-wah」はバック）",
+    "parts": {
+      "Intro": [],
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/r.html"
+  },
+  "Honey Pie": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（スキャットなどの合いの手を含む）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/hp.html"
+  },
+  "Savoy Truffle": {
+    "writer": "George Harrison",
+    "lead": "George Harrison",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/st.html"
+  },
+  "Cry Baby Cry": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（アウトロの「Can you take me back」はPaul）",
+    "parts": {
+      "Outro": [
+        "paul:L"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/cbc.html"
+  },
+  "Come Together": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ほぼ単独トラック。サビではPaulが少し重なる）",
+    "parts": {
+      "Chorus": [
+        "john:L:2",
+        "paul:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/ct.html"
+  },
+  "Something": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ひとりで単独・ダブル・ハモリを使い分けている）",
+    "parts": {
+      "Bridge": [
+        "george:L",
+        "george:H"
+      ],
+      "*": [
+        "george:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/s.html"
+  },
+  "Maxwell’s Silver Hammer": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（単独トラック。Georgeらがバック）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/msh.html"
+  },
+  "Oh! Darling": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァースはJohn・Georgeがバック）",
+    "parts": {
+      "Verse": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Bridge": [
+        "paul:L:2"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/od.html"
+  },
+  "Octopus’s Garden": {
+    "writer": "Ringo Starr（Georgeが補助）",
+    "lead": "Ringo Starr（Paul・Georgeがバック）",
+    "parts": {
+      "Verse 1": [
+        "ringo:L"
+      ],
+      "Pre-Chorus": [
+        "ringo:L"
+      ],
+      "*": [
+        "ringo:L",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/og.html"
+  },
+  "I Want You (She’s So Heavy)": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビにバック）",
+    "parts": {
+      "Chorus": [
+        "john:L",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/iwyssh.html"
+  },
+  "Here Comes the Sun": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（ほぼひとりで多重録音。ヴァースはダブルトラックとハモリ）",
+    "parts": {
+      "Bridge": [
+        "george:L",
+        "george:H"
+      ],
+      "*": [
+        "george:L:2",
+        "george:H"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/hcts.html"
+  },
+  "Because": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon・Paul McCartney・George Harrison の三声（3回重ね録り）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L",
+        "george:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/b4.html"
+  },
+  "You Never Give Me Your Money": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（後半にJohn・Georgeが加わる合唱）",
+    "parts": {
+      "Verse 1": [
+        "paul:L"
+      ],
+      "Verse 2": [
+        "paul:L",
+        "paul:H"
+      ],
+      "Interlude": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/yngmym.html"
+  },
+  "Sun King": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）、Paul・Georgeが和音のコーラス",
+    "parts": {
+      "*": [
+        "john:L:2",
+        "paul:H",
+        "george:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/sk.html"
+  },
+  "Mean Mr. Mustard": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）。Paulが3度上でハモる",
+    "parts": {
+      "*": [
+        "john:L:2",
+        "paul:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/mmm.html"
+  },
+  "Polythene Pam": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（ダブルトラック）。ヴァースでスキャットのバック",
+    "parts": {
+      "Verse": [
+        "john:L:2",
+        "paul:H",
+        "george:H"
+      ],
+      "*": [
+        "john:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/pp.html"
+  },
+  "She Came In Through the Bathroom Window": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）。サビはJohn・Georgeが3度で重なる",
+    "parts": {
+      "Chorus": [
+        "paul:L:2",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/scittbw.html"
+  },
+  "Golden Slumbers": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（単独トラック）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/gs.html"
+  },
+  "Carry That Weight": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァース）、サビは全員の合唱",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H",
+        "ringo:H"
+      ],
+      "Verse": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/ctw.html"
+  },
+  "The End": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ダブルトラック）。最後の部分はJohn・Georgeとの三声",
+    "parts": {
+      "Outro": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L:2"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/te.html"
+  },
+  "Her Majesty": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（アコースティックギターと単独トラック）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/hm.html"
+  },
+  "Two of Us": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（ヴァース・サビはJohnが3度でハモる。ブリッジはPaul）",
+    "parts": {
+      "Intro": [
+        "john:L"
+      ],
+      "Bridge": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L",
+        "john:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/tou.html"
+  },
+  "Dig a Pony": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon（サビはPaulがハモる）",
+    "parts": {
+      "Chorus": [
+        "john:L",
+        "paul:H"
+      ],
+      "*": [
+        "john:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/dap.html"
+  },
+  "Across the Universe": {
+    "writer": "John Lennon（Lennon–McCartney名義）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/atu.html"
+  },
+  "I Me Mine": {
+    "writer": "George Harrison",
+    "lead": "George Harrison（Johnは録音に不参加）",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/imm.html"
+  },
+  "Dig It": {
+    "writer": "Lennon–McCartney–Harrison–Starkey名義（4人共作）",
+    "lead": "John Lennon",
+    "parts": {
+      "*": [
+        "john:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/di.html"
+  },
+  "Let It Be": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（サビはバックが3度で重なる）",
+    "parts": {
+      "Chorus": [
+        "paul:L",
+        "john:H",
+        "george:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/lib.html"
+  },
+  "Maggie Mae": {
+    "writer": "伝承曲（編曲：Lennon–McCartney–Harrison–Starkey）",
+    "lead": "John Lennon と Paul McCartney（荒っぽい二声）",
+    "parts": {
+      "*": [
+        "john:L",
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/mmfrag.html"
+  },
+  "I’ve Got a Feeling": {
+    "writer": "Paul McCartney（原曲）と John Lennon（「Everybody had a hard year」の部分）（Lennon–McCartney名義）",
+    "lead": "Paul McCartney と John Lennon の掛け合い",
+    "parts": {
+      "Verse 1": [
+        "paul:L",
+        "john:H"
+      ],
+      "Verse 2": [
+        "paul:L",
+        "john:H"
+      ],
+      "Bridge": [
+        "paul:L"
+      ],
+      "Verse 3": [
+        "paul:L"
+      ],
+      "Verse 4": [
+        "john:L"
+      ],
+      "Verse 5": [
+        "john:L"
+      ],
+      "Verse 6": [
+        "paul:L"
+      ],
+      "Outro": [
+        "paul:L"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "sections": "unverified",
+    "paren": {
+      "voices": [
+        "john:L"
+      ],
+      "sections": [
+        "Verse 6",
+        "Outro"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/igaf.html"
+  },
+  "One After 909": {
+    "writer": "John Lennon 主体（Lennon–McCartney名義）",
+    "lead": "John Lennon（ヴァースはPaulが3度上でハモる）",
+    "parts": {
+      "Bridge": [
+        "john:L"
+      ],
+      "*": [
+        "john:L",
+        "paul:H"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/oa909.html"
+  },
+  "The Long and Winding Road": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（オーケストラ・合唱はPhil Spectorの後加）",
+    "parts": {
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/tlawr.html"
+  },
+  "For You Blue": {
+    "writer": "George Harrison",
+    "lead": "George Harrison",
+    "parts": {
+      "*": [
+        "george:L"
+      ]
+    },
+    "sections": "unverified",
+    "source": "https://awpnoteson.info/notes/fyb.html"
+  },
+  "Get Back": {
+    "writer": "Paul McCartney（Lennon–McCartney名義）",
+    "lead": "Paul McCartney（単独トラック。2番目のサビでJohnが少し重なる）",
+    "parts": {
+      "Intro": [
+        "paul:L",
+        "john:H"
+      ],
+      "Outro": [
+        "paul:L",
+        "john:H"
+      ],
+      "*": [
+        "paul:L"
+      ]
+    },
+    "source": "https://awpnoteson.info/notes/gb2.html"
   }
 }
