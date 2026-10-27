@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { prisma } from "../src/db.js";
 
 const apply = process.argv.includes("--apply");
+// --notes-only: 作曲・リードの解説文だけ更新し、下線の色(vocalParts)と括弧書きの上書きには触れない
+const notesOnly = process.argv.includes("--notes-only");
 // --only="曲名1|曲名2" で対象の曲を絞れる（未指定なら json の全曲）
 const onlyArg = process.argv.find((a) => a.startsWith("--only="));
 const only = onlyArg ? new Set(onlyArg.slice(7).split("|").map((x) => x.trim().toLowerCase())) : null;
@@ -83,11 +85,13 @@ for (const [title, c] of Object.entries(data)) {
     if (apply) {
       await prisma.track.update({
         where: { id: t.id },
-        data: { songwriterNote: c.writer ?? null, leadVocalNote: c.lead ?? null, vocalParts: c.parts ?? null },
+        data: notesOnly
+          ? { songwriterNote: c.writer ?? null, leadVocalNote: c.lead ?? null }
+          : { songwriterNote: c.writer ?? null, leadVocalNote: c.lead ?? null, vocalParts: c.parts ?? null },
       });
       touchedIds.push(t.id);
     }
-    if (c.paren) {
+    if (c.paren && !notesOnly) {
       if (t.vocalOverrides) {
         console.log("   ⏭ 画面で編集済みの上書きがあるので括弧書きの上書きはスキップ");
       } else {
