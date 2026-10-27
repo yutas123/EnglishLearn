@@ -96,15 +96,19 @@ export const SOURCES_KEY = "_sources";
 
 export type VocalSource = { url: string; note: string };
 
+/** 資料を指し示すキー。URLがあればURL、メモだけの資料ならメモ本文 */
+export const sourceKey = (r: VocalSource) => (r.url !== "" ? r.url : r.note);
+
 export function resolveSources(vocalOverrides: unknown): VocalSource[] {
   if (!vocalOverrides || typeof vocalOverrides !== "object") return [];
   const raw = (vocalOverrides as Record<string, unknown>)[SOURCES_KEY];
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((r) => {
     const { url, note } = (r ?? {}) as { url?: unknown; note?: unknown };
-    return typeof url === "string" && /^https?:\/\//.test(url)
-      ? [{ url, note: typeof note === "string" ? note : "" }]
-      : [];
+    const n = typeof note === "string" ? note : "";
+    // URLなしのメモだけの資料も許す（その場合 url は空文字）
+    if (typeof url === "string" && /^https?:\/\//.test(url)) return [{ url, note: n }];
+    return url === "" && n !== "" ? [{ url: "", note: n }] : [];
   });
 }
 

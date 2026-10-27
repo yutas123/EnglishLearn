@@ -17,6 +17,7 @@ import {
   type MemberKey,
   type VoicePart,
   type VocalSource,
+  sourceKey,
   type Voice,
 } from "@/lib/beatles";
 import VocalEditor, { type VocalScope } from "./VocalEditor";
@@ -292,7 +293,7 @@ export default function LyricsList({
   async function saveSources() {
     const added = sourcesDraft
       .map((r) => ({ url: r.url.trim(), note: r.note.trim() }))
-      .filter((r) => r.url !== "");
+      .filter((r) => r.url !== "" || r.note !== "");
     if (added.length > 0 && !(await postSources({ addSources: added }))) return;
     setSourcesDraft([]);
     setSourcesEditing(false);
@@ -851,14 +852,16 @@ export default function LyricsList({
                 <div key={i} className="flex items-start gap-2">
                   <p className="min-w-0 flex-1 break-all">
                     ✓{" "}
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
-                      {r.url}
-                    </a>
-                    {r.note && <span className="ml-2 text-zinc-900">{r.note}</span>}
+                    {r.url && (
+                      <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
+                        {r.url}
+                      </a>
+                    )}
+                    {r.note && <span className={r.url ? "ml-2 text-zinc-900" : "text-zinc-900"}>{r.note}</span>}
                   </p>
                   {sourcesEditing && (
                     <button
-                      onClick={() => postSources({ removeSource: r.url })}
+                      onClick={() => postSources({ removeSource: sourceKey(r) })}
                       disabled={sourcesSaving}
                       className="shrink-0 px-1 text-red-500 disabled:opacity-50"
                     >
@@ -876,14 +879,14 @@ export default function LyricsList({
                   type="url"
                   value={r.url}
                   onChange={(e) => updateSourceDraft(i, { url: e.target.value })}
-                  placeholder="https://..."
+                  placeholder="https://...（任意）"
                   className="min-w-0 flex-[2] rounded-lg border border-zinc-300 px-2 py-1.5"
                 />
                 <input
                   type="text"
                   value={r.note}
                   onChange={(e) => updateSourceDraft(i, { note: e.target.value })}
-                  placeholder="メモ（任意）"
+                  placeholder="メモ（URLなしならこれだけでOK）"
                   maxLength={200}
                   className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1.5"
                 />

@@ -27,7 +27,7 @@ function isValidChange(value: unknown): value is Change {
 
 /**
  * 歌詞の下線（誰が歌っているか）の行単位の上書きを保存する。
- * body: { addSources?: [{ url, note }]（確認済み資料の追記。既存は消さない）, removeSource?: url（その資料を1件削除）, changes: { "<lineIndex>": ["john:L:2", ...] | { parts: [{ end, v: [...] }] } | null } }
+ * body: { addSources?: [{ url, note }]（確認済み資料の追記。既存は消さない）, removeSource?: url（URLなしのメモはメモ本文。その資料を1件削除）, changes: { "<lineIndex>": ["john:L:2", ...] | { parts: [{ end, v: [...] }] } | null } }
  * 配列は「その行全体の線の構成（空配列=線なし）」、parts は「行内を文字位置で区切った部分ごとの構成」
  * （end は部分の終わりの文字位置）、nullは「上書きを消して初期値に戻す」。
  */
@@ -56,12 +56,13 @@ export async function POST(
         (r) =>
           typeof r?.url === "string" &&
           r.url.length <= 500 &&
-          /^https?:\/\/\S+$/.test(r.url) &&
-          (r.note === undefined || (typeof r.note === "string" && r.note.length <= 200))
+          (r.note === undefined || (typeof r.note === "string" && r.note.length <= 200)) &&
+          // URLは任意。空ならメモが必須
+          (r.url === "" ? typeof r.note === "string" && r.note.trim() !== "" : /^https?:\/\/\S+$/.test(r.url))
       )
     )
   ) {
-    return NextResponse.json({ error: "資料のURLが不正です（http(s)://で始めてください）" }, { status: 400 });
+    return NextResponse.json({ error: "資料が不正です（URLはhttp(s)://で始めるか、URLなしならメモを入力してください）" }, { status: 400 });
   }
   if (removeSource !== undefined && typeof removeSource !== "string") {
     return NextResponse.json({ error: "削除する資料が不正です" }, { status: 400 });
@@ -102,11 +103,11 @@ export async function POST(
   if (order === null) delete merged._order;
   else if (order !== undefined) merged._order = order;
   let sourceList = ((merged._sources as { url: string; note: string }[] | undefined) ?? []).slice();
-  if (typeof removeSource === "string") sourceList = sourceList.filter((r) => r.url !== removeSource);
+  if (typeof removeSource === "string") sourceList = sourceList.filter((r) => (r.url || r.note) !== removeSource);
   if (sources !== undefined) {
     for (const r of sources as { url: string; note?: string }[]) {
-      // 同じURLはメモだけ更新し、重複させない
-      const existing = sourceList.find((x) => x.url === r.url);
+      // 同じURLはメモだけ更新し、重複させない。URLなしのメモは同じ文面なら重複させない
+      const existing = sourceList.find((x) => (r.url !== "" ? x.url === r.url : x.url === "" && x.note === r.note));
       if (existing) existing.note = r.note ?? existing.note;
       else sourceList.push({ url: r.url, note: r.note ?? "" });
     }
